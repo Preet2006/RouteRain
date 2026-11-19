@@ -1,0 +1,16 @@
+pandas
+numpy
+scikit-learn
+requests
+rasterio
+# richdem omitted: no prebuilt wheel for this platform/Python version, and
+# building from source fails (its numpy dependency fails to compile/link).
+# Phase 3 uses the numpy.gradient fallback for slope instead.
+elevation
+matplotlib
+joblib
+python-dotenv
+osmnx
+geopy
+fastapi
+uvicorn[standard]

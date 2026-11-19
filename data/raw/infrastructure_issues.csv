@@ -1,0 +1,13 @@
+hotspot_id,has_infrastructure_issue,evidence_date,evidence_note,source_url
+H01,1,2025-12-04,"Chronic choked drain near Bilaspur Chowk causes standing water/mud and stink; also stalled flyover construction blocking lanes (2024-07-27, 2024-08-23, 2024-09-15 reports)",https://www.amarujala.com/delhi-ncr/gurgaon/the-drain-at-bilaspur-chowk-is-choked-and-stinks-gurgaon-news-c-24-1-gur1002-73731-2025-12-04
+H02,1,2024-08-11,"Medanta underpass (Rajiv Chowk) shut after pump failure - specific equipment failure, not routine response",https://www.tribuneindia.com/news/haryana/heavy-rains-bring-ggram-to-a-standstill
+H04,1,2026-07-07,"Section of NH-48 caved in near Narsinghpur - structural road/pavement failure, two lanes closed and diverted",https://www.deccanherald.com/india/haryana/gurugram-submerged-road-cave-ins-unending-traffic-jams-add-to-residents-woes-4065508
+H05,1,2026-08-25,"Sinkhole/road cave-in on IFFCO Chowk service lane after GMDA sewer line leak eroded soil",https://theprint.in/india/70-mm-rainfall-over-short-span-inundates-gurugram-road-cave-ins-unending-jams-compound-woes/3024709/
+H12,1,2024-08-11,"RWA complained of uncleaned storm drains in Sector 51 (Artemis Road area) - direct maintenance-neglect complaint",https://www.tribuneindia.com/news/haryana/what-our-readers-say-gurugram-roads-inundated-after-rain
+H03,0,,"No specific infrastructure defect found - flyover repair closure and sandbagging are routine response measures, not evidence of a structural defect",
+H06,0,,"No specific infrastructure defect found in collected sources",
+H07,0,,"No specific infrastructure defect found - pump deployment is routine citywide response",
+H08,0,,"No specific infrastructure defect found - pothole mentions are general road condition, not drainage-specific",
+H09,0,,"No specific infrastructure defect found in collected sources",
+H10,0,,"No specific infrastructure defect found - pump deployment is routine citywide response",
+H11,0,,"No specific infrastructure defect found in collected sources",
