@@ -125,3 +125,84 @@ def test_nominatim_limiter_is_shared_and_spaces_calls(monkeypatch):
     rp.geocode_bounded("b")
     assert stamps[1] - stamps[0] >= rp.NOMINATIM_MIN_DELAY_S - 0.05
     monkeypatch.setattr(rp, "_limited_geocode", None)
+
+
+# --- unreachable routes, edge geometry, polylines ---------------------------------
+
+def grid_with_pocket_and_island():
+    G = make_grid()
+    # one-way pocket: you can leave P (to grid node 31 = (3, 7)) but never enter it
+    G.add_node(1000, y=LAT0 + 3 * STEP, x=LON0 + 7 * STEP + 0.0005)
+    G.add_edge(1000, 31, length=60.0, travel_time=5.0)
+    # island: a separate two-way chain about 5 km away, smaller than the main grid
+    for i in range(3):
+        G.add_node(2000 + i, y=LAT0 + 0.05, x=LON0 + 0.05 + i * STEP)
+    for i in range(2):
+        G.add_edge(2000 + i, 2001 + i, length=220.0, travel_time=20.0)
+        G.add_edge(2001 + i, 2000 + i, length=220.0, travel_time=20.0)
+    return G
+
+
+def test_one_way_pocket_falls_back_to_main_component():
+    G = grid_with_pocket_and_island()
+    pocket = (G.nodes[1000]["y"], G.nodes[1000]["x"])
+    # without the fallback this is NetworkXNoPath (nothing can enter the pocket)
+    with pytest.raises(nx.NetworkXNoPath):
+        nx.shortest_path(G, 24, 1000, weight="travel_time")
+    r = rp.plan_route(at(3, 0), pocket, [], graph=G)
+    assert r["normal_route"]["path"][-1] == 31
+    assert r["dest_node_distance_m"] < rp.MAX_SNAP_M
+
+
+def test_routes_that_already_worked_are_not_resnapped():
+    G = grid_with_pocket_and_island()
+    # leaving the pocket works, so the original nearest nodes must be kept
+    pocket = (G.nodes[1000]["y"], G.nodes[1000]["x"])
+    r = rp.plan_route(pocket, at(3, 0), [], graph=G)
+    assert r["normal_route"]["path"][0] == 1000
+
+
+def test_point_too_far_from_main_network_raises_no_drivable_route():
+    G = grid_with_pocket_and_island()
+    island = (G.nodes[2000]["y"], G.nodes[2000]["x"])
+    with pytest.raises(rp.NoDrivableRouteError) as exc:
+        rp.plan_route(at(3, 0), island, [], graph=G)
+    assert str(exc.value) == "No drivable route found between these points."
+    assert not isinstance(exc.value, ValueError)  # keeps the web /api/route on its old 502 path
+
+
+def bendy_grid():
+    G = make_grid()
+    a, b = G.nodes[0], G.nodes[1]
+    bend = (b["x"] - 0.0005, a["y"] + 0.0006)
+    G.edges[0, 1, 0]["geometry"] = LineString([(a["x"], a["y"]), bend, (b["x"], b["y"])])
+    # stored the wrong way round on purpose: runs node 0 -> node 1 although the edge is 1 -> 0
+    G.edges[1, 0, 0]["geometry"] = LineString([(a["x"], a["y"]), bend, (b["x"], b["y"])])
+    return G, bend
+
+
+def test_path_coordinates_follow_edge_geometry():
+    G, bend = bendy_grid()
+    pts = rp.path_coordinates(G, [0, 1])
+    assert len(pts) == 3 and pts[1] == [bend[1], bend[0]]
+    straight = rp.path_coordinates(G, [0, 1], use_edge_geometry=False)
+    assert len(straight) == 2
+
+
+def test_path_coordinates_orient_reversed_geometry_and_drop_joints():
+    G, bend = bendy_grid()
+    pts = rp.path_coordinates(G, [1, 0])
+    assert pts[0] == [G.nodes[1]["y"], G.nodes[1]["x"]] and pts[-1] == [G.nodes[0]["y"], G.nodes[0]["x"]]
+    long_pts = rp.path_coordinates(G, [0, 1, 2])
+    assert len(long_pts) == 4  # 3 points on the bendy edge + 1 new point, joint not repeated
+
+
+def test_route_polyline_is_capped_at_300_points():
+    G = make_grid()
+    a, b = G.nodes[0], G.nodes[1]
+    xs = [a["x"] + (b["x"] - a["x"]) * i / 999 for i in range(1000)]
+    ys = [a["y"] + 0.0004 * ((i % 10) / 10) for i in range(1000)]
+    G.edges[0, 1, 0]["geometry"] = LineString(list(zip(xs, ys)))
+    out = rp.route_polyline(G, [0, 1], 300)
+    assert 2 <= len(out) <= 300
+    assert out[0] == [ys[0], xs[0]] and out[-1] == [ys[-1], xs[-1]]

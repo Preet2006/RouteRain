@@ -49,8 +49,10 @@ import weakref
 
 import geopandas as gpd
 import networkx as nx
+import numpy as np
 import osmnx as ox
 import pandas as pd
+from scipy.spatial import cKDTree
 from dotenv import load_dotenv
 from geopy.distance import geodesic
 from geopy.geocoders import Nominatim
@@ -59,6 +61,7 @@ from shapely.geometry import Point
 
 sys.path.insert(0, ".")
 from config import BASE_DIR, EXTERNAL_DIR, HOTSPOTS_CSV, GREEN_MAX, YELLOW_MAX
+from src.polyline import simplify_polyline
 import os
 
 ROAD_GRAPH_PATH = os.path.join(EXTERNAL_DIR, "road_graph.graphml")
@@ -342,9 +345,100 @@ def point_inside_hotspot_buffer(lat, lon, hotspot, red_buffer_m=RED_BUFFER_M, ye
     return geodesic((lat, lon), (hotspot["lat"], hotspot["lon"])).meters <= buffer_m
 
 
+NO_ROUTE_MESSAGE = "No drivable route found between these points."
+MAX_SNAP_M = 1000  # a point may be moved at most this far when snapping to the main road network
+
+
+class NoDrivableRouteError(nx.NetworkXNoPath):
+    """No drivable route exists, even after snapping to the main road network.
+    Deliberately NOT a ValueError, so the existing web /api/route keeps returning
+    the generic 502 it always did; the mobile endpoint catches this class for its 422."""
+
+
+_scc_caches = weakref.WeakKeyDictionary()
+
+
+def _scc_index(graph):
+    """Largest strongly connected component of the graph, plus a KD-tree for nearest-node
+    lookups inside it. Built once per graph (about a second for the Gurugram graph)."""
+    with _cache_lock:
+        index = _scc_caches.get(graph)
+        if index is None:
+            ids = list(max(nx.strongly_connected_components(graph), key=len))
+            lats = np.array([graph.nodes[n]["y"] for n in ids])
+            lons = np.array([graph.nodes[n]["x"] for n in ids])
+            lon_scale = float(np.cos(np.radians(lats.mean())))
+            index = {"ids": ids, "members": frozenset(ids), "lon_scale": lon_scale,
+                     "tree": cKDTree(np.column_stack([lats, lons * lon_scale]))}
+            _scc_caches[graph] = index
+        return index
+
+
+def _node_distance_m(graph, node, latlon):
+    return geodesic(latlon, (graph.nodes[node]["y"], graph.nodes[node]["x"])).meters
+
+
+def _snap_to_main_component(graph, origin_latlon, dest_latlon, max_snap_m):
+    index = _scc_index(graph)
+    snapped = []
+    for lat, lon in (origin_latlon, dest_latlon):
+        node = ox.distance.nearest_nodes(graph, lon, lat)
+        if node not in index["members"]:
+            _, i = index["tree"].query([lat, lon * index["lon_scale"]])
+            node = index["ids"][int(i)]
+            if _node_distance_m(graph, node, (lat, lon)) > max_snap_m:
+                raise NoDrivableRouteError(NO_ROUTE_MESSAGE)
+        snapped.append(node)
+    return snapped[0], snapped[1]
+
+
+def path_coordinates(graph, path, use_edge_geometry=True):
+    """[[lat, lon], ...] along the route. With use_edge_geometry the line follows each road's
+    real shape (osmnx edge 'geometry'); edges without one fall back to a straight node-to-node
+    segment. Parallel edges are resolved the same way route_metrics does (lowest travel_time)."""
+    if len(path) == 1:
+        node = graph.nodes[path[0]]
+        return [[node["y"], node["x"]]]
+    coords = []
+    for u, v in zip(path[:-1], path[1:]):
+        un, vn = graph.nodes[u], graph.nodes[v]
+        geom = _min_weight_edge_data(graph, u, v, "travel_time").get("geometry") if use_edge_geometry else None
+        if geom is None:
+            pts = [(un["y"], un["x"]), (vn["y"], vn["x"])]
+        else:
+            pts = [(y, x) for x, y in geom.coords]
+            if ((pts[-1][0] - un["y"]) ** 2 + (pts[-1][1] - un["x"]) ** 2
+                    < (pts[0][0] - un["y"]) ** 2 + (pts[0][1] - un["x"]) ** 2):
+                pts.reverse()  # make sure the segment runs u -> v
+        coords.extend(pts if not coords else pts[1:])  # drop the duplicated joint
+    return [[float(y), float(x)] for y, x in coords]
+
+
+def route_polyline(graph, path, max_points=300):
+    """Edge-geometry polyline simplified (Douglas-Peucker) to at most max_points points."""
+    return simplify_polyline(path_coordinates(graph, path), max_points)
+
+
+def graph_loaded():
+    return _graph_cache is not None
+
+
+def warm_up():
+    """Server startup: load the road graph and build everything the first request would
+    otherwise pay for -- projected edge geometries, the main strongly connected component
+    and the buffer edge sets of the 12 hotspots at both radii."""
+    graph = load_road_graph()
+    _edge_cache(graph)
+    _scc_index(graph)
+    for hs in _load_hotspots().itertuples():
+        for radius in (RED_BUFFER_M, YELLOW_BUFFER_M):
+            buffer_edges(graph, hs.lat, hs.lon, radius)
+    return graph
+
+
 def plan_route(origin_latlon, dest_latlon, active_hotspots, *, red_buffer_m=RED_BUFFER_M,
                yellow_buffer_m=YELLOW_BUFFER_M, red_penalty=RED_PENALTY, yellow_penalty=YELLOW_PENALTY,
-               include_proximity=False, graph=None):
+               include_proximity=False, graph=None, max_snap_m=MAX_SNAP_M):
     """Buffers and penalties default to the module constants, so existing callers
     (the web /api/route) behave exactly as before. Per-request overrides (e.g.
     yellow_penalty=1 for 'balanced') never touch module state. include_proximity
@@ -355,7 +449,16 @@ def plan_route(origin_latlon, dest_latlon, active_hotspots, *, red_buffer_m=RED_
     orig_node = ox.distance.nearest_nodes(graph, origin_latlon[1], origin_latlon[0])
     dest_node = ox.distance.nearest_nodes(graph, dest_latlon[1], dest_latlon[0])
 
-    normal_path = nx.shortest_path(graph, orig_node, dest_node, weight="travel_time")
+    try:
+        normal_path = nx.shortest_path(graph, orig_node, dest_node, weight="travel_time")
+    except nx.NetworkXNoPath:
+        # The graph is directed: a point can snap to a one-way pocket. Only now (so every
+        # route that used to work is unchanged) snap to the largest strongly connected part.
+        orig_node, dest_node = _snap_to_main_component(graph, origin_latlon, dest_latlon, max_snap_m)
+        try:
+            normal_path = nx.shortest_path(graph, orig_node, dest_node, weight="travel_time")
+        except nx.NetworkXNoPath as exc:
+            raise NoDrivableRouteError(NO_ROUTE_MESSAGE) from exc
     normal_length_m, normal_time_s = route_metrics(graph, normal_path)
 
     # No graph copy: precomputed buffer edge sets + a weight function (see 5c in MOBILE_APP_PLAN).
@@ -402,6 +505,9 @@ def plan_route(origin_latlon, dest_latlon, active_hotspots, *, red_buffer_m=RED_
         "still_passes_through": still_passes_through,
         "origin_inside_hotspots": origin_inside,
         "dest_inside_hotspots": dest_inside,
+        # Additive keys (the web API ignores them): how far each point is from the road node used.
+        "origin_node_distance_m": _node_distance_m(graph, orig_node, origin_latlon),
+        "dest_node_distance_m": _node_distance_m(graph, dest_node, dest_latlon),
     }
     if include_proximity:
         near_kwargs = {"red_buffer_m": red_buffer_m, "yellow_buffer_m": yellow_buffer_m}

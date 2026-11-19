@@ -51,14 +51,17 @@
 
 ```
 expected_time(route) = drive_time(route)
-                     + Σ over hotspots h near route:  p_h × FLOOD_DELAY_MIN[tier_h]
+                     + Σ over hotspots h near route:  p_h × FLOOD_DELAY_MIN
 
 expected_saving = expected_time(normal_route) - expected_time(flood_aware_route)
 ```
 
 - `p_h` is the **calibrated** probability from `predict.py` (Phase 7 calibrated it with Platt scaling precisely so it can be read as a probability).
-- "Near route" uses the same buffers as `route_planner.py` (500 m RED, 300 m YELLOW). GREEN hotspots add `p_h × FLOOD_DELAY_MIN["GREEN"]` too, so the maths is consistent.
-- `FLOOD_DELAY_MIN` is an **assumption**, not data. Put it in `config.py` as e.g. `{"GREEN": 15, "YELLOW": 20, "RED": 30}` and have the project owner confirm or change the values in Phase M0. The app's info screen must state that the saving is an estimate built on this assumption.
+- "Near route" uses the same buffers as `route_planner.py` (500 m RED, 300 m YELLOW). GREEN hotspots add `p_h × FLOOD_DELAY_MIN` too, so the maths is consistent. Replay-day hotspots that were not scored have no probability and add nothing.
+- **The delay is one number, independent of tier** (owner decision in M0). How likely a flood is lives in `p_h`; how long a flood delays you lives in `FLOOD_DELAY_MIN`. It is an **assumption**, not measured data, built in `config.py` in two steps:
+  - `FLOOD_SEVERITY_DELAY_MIN = {"minor": 5, "disrupted": 20, "closed": 45}` minutes, by the severity recorded in `flood_events.csv` (1 = minor pooling, 2 = traffic disrupted, 3 = road closed).
+  - `FLOOD_DELAY_MIN` = the average of those three values weighted by how often each severity appears in `flood_events.csv` (15 minor, 121 disrupted, 32 closed of 168), which comes to about **23.4 minutes**. It is computed when `config.py` loads.
+  - **Do not change either value after routes have been scored without asking the project owner.** Only 2 of the 168 events record a duration, so the data cannot confirm these numbers. The app's info screen must state that the saving is an estimate built on this assumption.
 - Speech rules:
   - If routes are identical → "No detour needed today."
   - If `expected_saving > 0` → "This route adds about A minutes of driving but is expected to save about S minutes overall by avoiding Bilaspur Chowk, rated RED."
@@ -80,7 +83,7 @@ The demo is likely to happen outside June to September. A live forecast will alm
 
 **Approach:** a clearly labelled **Scenario switch** with two modes:
 - **Live** (default): today's Open-Meteo forecast through `predict.py`.
-- **Replay a past monsoon day**: reuse `historical_scenarios()` in `app/api.py`, which rescores `training_data.csv` rows on dates with at least one recorded flood (47 dates). A short list of 3 to 5 replay dates is chosen by the project owner in Phase M0, including at least one from the 2025 to 2026 test period so the model has not seen it in training. Candidates from the repo review: 2025-07-09, 2026-07-08, 2025-07-31.
+- **Replay a past monsoon day**: reuse `historical_scenarios()` in `app/api.py`, which rescores `training_data.csv` rows on dates with at least one recorded flood (47 dates). The replay dates were chosen by the project owner in Phase M0 and live in `config.MOBILE_REPLAY_DATES`: **2026-08-07, 2026-07-08, 2025-07-31, 2025-07-09**. All four are in the 2025 to 2026 test period, so the model has not seen them in training.
 - **Hotspots with no row on a replay date:** `training_data.csv` only holds hotspot-days with more than 10 mm of rain, so some replay dates cover as few as 2 hotspots. Hotspots without a row are shown as **"LOW RAIN: not scored (under 10 mm)"** with a neutral grey marker, and are treated like GREEN for routing. They are never given an invented probability.
 - **Ground truth in replay:** each replay row carries the real `flooded` outcome. Show it only as a separate, labelled line in the hotspot sheet ("Reported that day: flooded / no report"), never as the prediction. Used honestly, it lets the demo show where the model was right and where it missed.
 - In replay mode a yellow banner shows "Replay: 14 July 2025 weather", and the spoken line starts with "On 14 July 2025, ...".
@@ -197,7 +200,7 @@ Validation: reject origins/destinations more than 1 km from the nearest road-gra
 2. Confirm `route_planner.py` returns travel time (not only length), and how the road graph's bounding box compares with the 12 hotspots.
 3. Time a cold backend start (graph load + model load) and a single route computation. Report the numbers; a demo-day route should return in under ~3 s.
 4. Propose, for the owner to approve:
-   - `FLOOD_DELAY_MIN` values per tier (§2.1).
+   - The flood delay (§2.1): decided, a single tier-independent `FLOOD_DELAY_MIN` of about 23.4 minutes from `FLOOD_SEVERITY_DELAY_MIN`.
    - 3 to 5 replay dates with the reason for each (§2.3).
    - Draft of `places_gurugram.csv` (§2.2), every row marked `verified=0`.
 5. Check the dev machine: Node LTS version, `npx expo --version`, Android phone's Android version, Expo Go installed from Play Store.
@@ -212,10 +215,10 @@ Validation: reject origins/destinations more than 1 km from the nearest road-gra
 
 **Tasks:**
 1. Add `app/mobile_api.py` as an `APIRouter` mounted in `app/api.py` under `/mobile/v1`. Do not break existing web endpoints.
-2. Add `FLOOD_DELAY_MIN`, `MOBILE_REPLAY_DATES`, `ROUTE_CACHE_TTL_MIN = 30` to `config.py`.
+2. Add `FLOOD_SEVERITY_DELAY_MIN`, `FLOOD_DELAY_MIN`, `MOBILE_REPLAY_DATES`, `ROUTE_CACHE_TTL_MIN = 30` to `config.py` (done).
 3. Implement `expected_time` / `expected_saving` (§2.1) as a pure function in `src/route_metrics.py` with unit tests (`tests/test_route_metrics.py`, pytest): identical routes → saving 0; no hotspots → saving 0; RED on normal route only → positive saving; flood-aware drive time ≥ normal drive time always.
 4. Caution mode: `balanced` sets the YELLOW penalty to ×1 for that request only. `route_planner.py` currently holds the penalties and buffers as module constants (lines 62 to 65), so add optional parameters to `plan_route` with the current values as defaults. The existing web `/api/route` must behave exactly as before.
-5. Polyline simplification to ≤ 300 points per route (Douglas–Peucker via `shapely`, already imported by `route_planner.py`).
+5. Polyline simplification to ≤ 300 points per route (Douglas–Peucker via `shapely`, already imported by `route_planner.py`). Polylines follow the road **edge geometry** (owner decision), not just the junction nodes, and are simplified after that.
 5a. A new proximity function listing **every** hotspot (GREEN included) within a buffer of each route, for the expected-time maths in §2.1. Use the YELLOW 300 m buffer for GREEN hotspots.
 5b. A module-level Nominatim rate limiter (the current one is rebuilt on every call, so the 1 req/s limit is not enforced across requests).
 5c. Performance and memory: the road graph alone takes ~1 GB of RAM (measured in L0 part 1), and `build_penalized_graph` copies the whole graph on every request. Do **not** cache full graph copies. Instead:
@@ -223,6 +226,8 @@ Validation: reject origins/destinations more than 1 km from the nearest road-gra
    - Route with a networkx weight **function**, e.g. `weight=lambda u, v, d: d["travel_time"] * penalty_for(u, v)`, so the original graph is never copied.
    - Report before/after timings and peak memory. The existing web `/api/route` should switch to the same path only if its outputs stay identical on 2 test routes.
 5d. Coordinate input: `/mobile/v1/route` takes lat/lon and calls `plan_route` directly, skipping the text resolver. Keep the existing 15 km out-of-area rule for text geocoding and add the 1 km snap-to-road check for lat/lon.
+5e. Unreachable routes (owner decision): the graph is directed, and a point can snap to a one-way pocket with no path (for example Ambience Mall to Sohna). Try the normal nearest nodes first; if there is no path, snap both points to the nearest node of the largest strongly connected component; if there is still no path (or that snap is more than 1 km away), `/route` returns 422 "No drivable route found between these points."
+5f. Startup (owner decision): load the road graph and build the edge cache when the server starts, so the first request is not slow.
 6. Curated places search + rate-limited, cached Nominatim geocode (1 req/s, identifying User-Agent, bounded viewbox).
 7. `tests/test_mobile_api.py` using FastAPI `TestClient` for every endpoint, including the out-of-coverage error and a forced-RED replay route.
 

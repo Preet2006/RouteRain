@@ -4,17 +4,20 @@ Pure functions only: no I/O, no model, no graph. Inputs are plain numbers and
 lists of hotspot dicts, so everything here is unit-testable on its own.
 
     expected_time(route) = drive_time(route)
-                         + sum over hotspots h near the route of p_h * FLOOD_DELAY_MIN[tier_h]
+                         + sum over hotspots h near the route of p_h * FLOOD_DELAY_MIN
 
     expected_saving = expected_time(normal route) - expected_time(flood-aware route)
 
-A "hotspot near a route" is a dict with at least 'hotspot_id', 'tier' and
-'probability' (the calibrated probability from predict.py). A hotspot with no
-probability (for example a replay-day hotspot that was not scored because rain
-was under 10 mm) contributes 0 delay: no probability is ever invented.
+A "hotspot near a route" is a dict with at least 'hotspot_id' and 'probability'
+(the calibrated probability from predict.py). The delay is TIER-INDEPENDENT:
+how likely a flood is lives in p_h, how long it delays you lives in the single
+FLOOD_DELAY_MIN. A hotspot with no probability (for example a replay-day
+hotspot that was not scored because rain was under 10 mm) contributes 0 delay:
+no probability is ever invented.
 
-FLOOD_DELAY_MIN is an ASSUMPTION about how long a flooded hotspot delays a
-driver, not data. It is passed in by the caller (it will live in config.py).
+FLOOD_DELAY_MIN (config.py) is an ASSUMPTION about the delay of a flooded
+hotspot, derived from assumed per-severity delays weighted by the severity mix
+of the reported floods. It is passed in by the caller.
 """
 
 import math
@@ -22,17 +25,20 @@ import math
 DRIVE_TIME_TOLERANCE_MIN = 0.01  # float noise allowed when checking aware >= normal
 
 
+def _check_delay(flood_delay_min):
+    if isinstance(flood_delay_min, bool) or not isinstance(flood_delay_min, (int, float)) or flood_delay_min < 0:
+        raise ValueError(f"flood_delay_min must be a number >= 0, got {flood_delay_min!r}")
+
+
 def hotspot_delay_min(hotspot, flood_delay_min):
-    """Expected delay (minutes) contributed by one nearby hotspot: p * delay[tier]."""
+    """Expected delay (minutes) contributed by one nearby hotspot: p * flood_delay_min."""
+    _check_delay(flood_delay_min)
     p = hotspot.get("probability")
     if p is None:
         return 0.0
     if not 0.0 <= p <= 1.0:
         raise ValueError(f"probability out of range for {hotspot.get('hotspot_id')}: {p}")
-    tier = hotspot.get("tier")
-    if tier not in flood_delay_min:
-        raise ValueError(f"no FLOOD_DELAY_MIN entry for tier {tier!r} (hotspot {hotspot.get('hotspot_id')})")
-    return p * flood_delay_min[tier]
+    return p * flood_delay_min
 
 
 def expected_delay_min(near_hotspots, flood_delay_min):
