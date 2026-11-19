@@ -56,10 +56,10 @@ import joblib
 import pandas as pd
 
 sys.path.insert(0, ".")
-from config import PROCESSED_DIR, GREEN_MAX, YELLOW_MAX
+from config import BASE_DIR, PROCESSED_DIR, GREEN_MAX, YELLOW_MAX
 import os
 
-MODEL_PATH = os.path.join("models", "risk_model.pkl")
+MODEL_PATH = os.path.join(BASE_DIR, "models", "risk_model.pkl")
 TERRAIN_CSV = os.path.join(PROCESSED_DIR, "terrain_features.csv")
 TRAINING_DATA_CSV = os.path.join(PROCESSED_DIR, "training_data.csv")
 WEATHER_CSV = os.path.join(PROCESSED_DIR, "weather_features.csv")

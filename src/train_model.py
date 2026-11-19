@@ -60,11 +60,11 @@ from sklearn.metrics import (
 )
 
 sys.path.insert(0, ".")
-from config import PROCESSED_DIR
+from config import BASE_DIR, PROCESSED_DIR
 import os
 
 TRAINING_DATA_CSV = os.path.join(PROCESSED_DIR, "training_data.csv")
-MODEL_PATH = os.path.join("models", "risk_model.pkl")
+MODEL_PATH = os.path.join(BASE_DIR, "models", "risk_model.pkl")
 CONFIG_PATH = "config.py"
 MIN_TRAIN_POSITIVES = 40
 
@@ -357,7 +357,7 @@ def main():
     print("\nTier distribution + flood rate (calibrated probabilities, new cutoffs):", file=sys.stderr)
     print(tier_df.groupby("tier").agg(n=("flooded", "size"), flood_rate=("flooded", "mean")).to_string(), file=sys.stderr)
 
-    os.makedirs("models", exist_ok=True)
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     joblib.dump(
         {
             "model": final_model_obj, "model_name": chosen_name, "feature_cols": FEATURE_COLS,

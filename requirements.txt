@@ -12,5 +12,9 @@ joblib
 python-dotenv
 osmnx
 geopy
+geopandas
+shapely
+networkx
+scipy
 fastapi
 uvicorn[standard]

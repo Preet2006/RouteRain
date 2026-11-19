@@ -49,13 +49,14 @@ import geopandas as gpd
 import networkx as nx
 import osmnx as ox
 import pandas as pd
+from dotenv import load_dotenv
 from geopy.distance import geodesic
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 from shapely.geometry import Point
 
 sys.path.insert(0, ".")
-from config import EXTERNAL_DIR, HOTSPOTS_CSV, GREEN_MAX, YELLOW_MAX
+from config import BASE_DIR, EXTERNAL_DIR, HOTSPOTS_CSV, GREEN_MAX, YELLOW_MAX
 import os
 
 ROAD_GRAPH_PATH = os.path.join(EXTERNAL_DIR, "road_graph.graphml")
@@ -63,7 +64,9 @@ RED_BUFFER_M = 500
 YELLOW_BUFFER_M = 300
 RED_PENALTY = 15
 YELLOW_PENALTY = 3
-USER_AGENT = "RouteRain-Research-Project/1.0 (contact: yugenjarwal13@gmail.com)"
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+# Nominatim requires an identifying User-Agent; the contact lives in .env, not in code.
+USER_AGENT = os.environ.get("NOMINATIM_USER_AGENT", "RouteRain-Research-Project/1.0")
 
 HOTSPOT_MATCH_CUTOFF = 0.8  # difflib similarity ratio, 0-1 -- 0.6 was tried first and
     # produced a real false positive ("Jaipur" matched "Narsingpur" at 0.625); legitimate
