@@ -1,0 +1,66 @@
+place_id,name,category,lat,lon,aliases,verified,coord_source,confidence,notes
+P001,Bilaspur Chowk,hotspot,28.2886447,76.8601575,bilaspur,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H01; coordinate reused from hotspots.csv
+P002,Rajiv Chowk,hotspot,28.4474509,77.0327407,rajiv chowk underpass,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H02; coordinate reused from hotspots.csv
+P003,Hero Honda Chowk,hotspot,28.436102,77.010182,hero honda,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H03; coordinate reused from hotspots.csv
+P004,Narsingpur,hotspot,28.414294,76.995095,narsingpur village,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H04; coordinate reused from hotspots.csv
+P005,IFFCO Chowk,hotspot,28.4723277,77.0724222,iffco chowk metro;iffco,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H05; coordinate reused from hotspots.csv
+P006,Basai Chowk,hotspot,28.457975,76.990123,basai,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H06; coordinate reused from hotspots.csv
+P007,Subhash Chowk,hotspot,28.4277156,77.0371069,subhash chowk;subhash,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H07; coordinate reused from hotspots.csv
+P008,Sohna Road,hotspot,28.4115053,77.0419027,sohna road,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H08; coordinate reused from hotspots.csv
+P009,Golf Course Road,hotspot,28.448959,77.0998715,golf course rd;golf course,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H09; coordinate reused from hotspots.csv
+P010,Sheetla Mata Road,hotspot,28.4783935,77.0305489,sheetla mata;sheetla mata mandir,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H10; coordinate reused from hotspots.csv
+P011,Sadar Bazaar,hotspot,28.4608629,77.0292838,sadar bazaar;sadar,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H11; coordinate reused from hotspots.csv
+P012,Artemis Road,hotspot,28.4311271,77.0718163,artemis hospital;artemis,0,hotspots.csv (Phase 2 coordinate),medium,Monitored hotspot H12; coordinate reused from hotspots.csv
+P013,HUDA City Centre Metro,metro,28.4595,77.0727,huda city centre;huda;city centre,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P014,Sikanderpur Metro,metro,28.4814,77.0932,sikandarpur,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P015,MG Road Metro,metro,28.4797,77.08,mg road,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P016,Guru Dronacharya Metro,metro,28.4818,77.1024,dronacharya;gurudronacharya,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P017,Belvedere Towers Rapid Metro,metro,28.4948,77.0927,belvedere,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P018,Cyber City Rapid Metro,metro,28.4939,77.0887,cyber city,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P019,Moulsari Avenue Rapid Metro,metro,28.4893,77.0937,moulsari,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P020,Sector 55-56 Rapid Metro,metro,28.4264,77.1078,sector 55 56,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P021,Cyber Hub,landmark,28.4951,77.0891,cyberhub;dlf cyber hub;cyber city,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P022,Ambience Mall,mall,28.5041,77.0969,ambience,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P023,MGF Metropolitan Mall,mall,28.4797,77.0805,metropolitan mall;mgf,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P024,Kingdom of Dreams,landmark,28.4688,77.0686,kod,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P025,Galleria Market,market,28.4672,77.0888,galleria;dlf phase 4,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P026,Sector 29 Market,market,28.469,77.067,leisure valley;sector 29 leisure valley,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P027,Gurugram Railway Station,transport,28.479,77.0215,gurgaon railway station;gurgaon station,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P028,Udyog Vihar,office area,28.5008,77.0833,udyog vihar phase 4;udyog vihar phase 1,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P029,Palam Vihar,residential,28.509,77.031,,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P030,Sohna,town,28.2476,77.0661,sohna town,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P031,Manesar,town,28.3541,76.937,imt manesar,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P032,Kherki Daula Toll Plaza,transport,28.3917,76.988,kherki daula;toll plaza,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P033,Badshahpur,town,28.4036,77.0371,,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P034,DLF Phase 1,residential,28.4743,77.095,dlf 1;qutab enclave,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P035,DLF Phase 2,residential,28.488,77.09,dlf 2,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P036,DLF Phase 5,residential,28.4455,77.098,dlf 5,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P037,Sushant Lok Phase 1,residential,28.4605,77.064,sushant lok,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P038,South City 1,residential,28.4485,77.045,south city,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P039,Medanta The Medicity,hospital,28.4395,77.0422,medanta;medicity,0,approx_from_memory,medium,Coordinate typed from memory; check pin on a map
+P040,Fortis Memorial Research Institute,hospital,28.451,77.0713,fortis;fmri,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P041,Paras Hospitals,hospital,28.458,77.097,paras,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P042,Civil Hospital Gurugram,hospital,28.465,77.02,civil hospital;general hospital,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P043,Max Hospital Gurgaon,hospital,28.4286,77.063,max hospital;max,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P044,Management Development Institute,college,28.449,77.096,mdi;mdi gurgaon,0,approx_from_memory,low,Coordinate typed from memory; check pin on a map
+P045,Sector 14,sector,28.471,77.023,sec 14;sector14,0,approx_from_memory,low,Sector centroid guess; check on a map
+P046,Sector 15,sector,28.463,77.028,sec 15;sector15,0,approx_from_memory,low,Sector centroid guess; check on a map
+P047,Sector 29,sector,28.467,77.065,sec 29;sector29,0,approx_from_memory,low,Sector centroid guess; check on a map
+P048,Sector 31,sector,28.456,77.052,sec 31;sector31,0,approx_from_memory,low,Sector centroid guess; check on a map
+P049,Sector 40,sector,28.443,77.058,sec 40;sector40,0,approx_from_memory,low,Sector centroid guess; check on a map
+P050,Sector 43,sector,28.454,77.099,sec 43;sector43,0,approx_from_memory,low,Sector centroid guess; check on a map
+P051,Sector 44,sector,28.451,77.072,sec 44;sector44,0,approx_from_memory,low,Sector centroid guess; check on a map
+P052,Sector 45,sector,28.444,77.075,sec 45;sector45,0,approx_from_memory,low,Sector centroid guess; check on a map
+P053,Sector 47,sector,28.4165,77.043,sec 47;sector47,0,approx_from_memory,low,Sector centroid guess; check on a map
+P054,Sector 49,sector,28.412,77.049,sec 49;sector49,0,approx_from_memory,low,Sector centroid guess; check on a map
+P055,Sector 50,sector,28.42,77.061,sec 50;sector50,0,approx_from_memory,low,Sector centroid guess; check on a map
+P056,Sector 51,sector,28.428,77.064,sec 51;sector51,0,approx_from_memory,low,Sector centroid guess; check on a map
+P057,Sector 52,sector,28.435,77.06,sec 52;sector52,0,approx_from_memory,low,Sector centroid guess; check on a map
+P058,Sector 53,sector,28.442,77.102,sec 53;sector53,0,approx_from_memory,low,Sector centroid guess; check on a map
+P059,Sector 54,sector,28.432,77.101,sec 54;sector54,0,approx_from_memory,low,Sector centroid guess; check on a map
+P060,Sector 55,sector,28.427,77.095,sec 55;sector55,0,approx_from_memory,low,Sector centroid guess; check on a map
+P061,Sector 56,sector,28.424,77.101,sec 56;sector56,0,approx_from_memory,low,Sector centroid guess; check on a map
+P062,Sector 57,sector,28.415,77.082,sec 57;sector57,0,approx_from_memory,low,Sector centroid guess; check on a map
+P063,Sector 65,sector,28.398,77.064,sec 65;sector65,0,approx_from_memory,low,Sector centroid guess; check on a map
+P064,Sector 66,sector,28.403,77.082,sec 66;sector66,0,approx_from_memory,low,Sector centroid guess; check on a map
+P065,Sector 67,sector,28.393,77.067,sec 67;sector67,0,approx_from_memory,low,Sector centroid guess; check on a map
