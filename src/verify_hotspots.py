@@ -26,14 +26,16 @@ import time
 import requests
 
 sys.path.insert(0, ".")
-from config import HOTSPOTS_CSV, RAW_DIR
+from config import BASE_DIR, HOTSPOTS_CSV, RAW_DIR
 import os
+from dotenv import load_dotenv
 
 VERIFICATION_CSV = os.path.join(RAW_DIR, "hotspots_verification.csv")
 
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
-USER_AGENT = "RouteRain-Research-Project/1.0 (contact: yugenjarwal13@gmail.com)"
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+USER_AGENT = os.environ.get("NOMINATIM_USER_AGENT", "RouteRain-Research-Project/1.0")
 REQUEST_DELAY_SECONDS = 1.1  # Nominatim usage policy: max 1 req/sec
 
 # Each candidate: (hotspot_id, name, search_query, type, notes)

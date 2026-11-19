@@ -65,7 +65,7 @@ import os
 
 TRAINING_DATA_CSV = os.path.join(PROCESSED_DIR, "training_data.csv")
 MODEL_PATH = os.path.join(BASE_DIR, "models", "risk_model.pkl")
-CONFIG_PATH = "config.py"
+CONFIG_PATH = os.path.join(BASE_DIR, "config.py")
 MIN_TRAIN_POSITIVES = 40
 
 FEATURE_COLS = [
