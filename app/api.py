@@ -4,6 +4,8 @@ from __future__ import annotations
 import datetime as dt
 import math
 import os
+import sys
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -21,7 +23,8 @@ from src.explain import (build_explanation, compute_hotspot_hit_rates,
 from src.predict import (compute_forecast_season_cumulative, load_flood_rate_priors,
                          load_infrastructure_flags, load_model, predict_for_hotspot,
                          predict_risk)
-from src.route_planner import load_road_graph, plan_route, resolve_location
+from src.route_planner import load_road_graph, plan_route, resolve_location, warm_up
+from app.mobile_api import router as mobile_router
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = ROOT / "frontend" / "dist"
@@ -29,7 +32,22 @@ WEATHER = os.path.join(PROCESSED_DIR, "weather_features.csv")
 TERRAIN = os.path.join(PROCESSED_DIR, "terrain_features.csv")
 TRAINING = os.path.join(PROCESSED_DIR, "training_data.csv")
 
-app = FastAPI(title="RouteRain API", version="1.0.0", docs_url=None, redoc_url=None)
+
+@asynccontextmanager
+async def lifespan(_app):
+    """Load the road graph and build the routing caches at startup (about 10 s) so the first
+    request is not slow. A missing graph file does not stop the server: /health reports
+    graph_loaded=false and routing endpoints fail with their usual clear message.
+    Set ROUTERAIN_SKIP_WARMUP=1 to skip this (faster dev restarts)."""
+    if os.environ.get("ROUTERAIN_SKIP_WARMUP") != "1":
+        try:
+            warm_up()
+        except FileNotFoundError as exc:
+            print(f"WARNING: startup warm-up skipped: {exc}", file=sys.stderr)
+    yield
+
+
+app = FastAPI(title="RouteRain API", version="1.0.0", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
@@ -205,6 +223,9 @@ def create_route(body: RouteRequest):
     except Exception as exc:
         raise HTTPException(502, "Route could not be computed. Check the address and try again.") from exc
 
+
+# Must come BEFORE the static "/" mount below, which would otherwise swallow /mobile/v1/*.
+app.include_router(mobile_router)
 
 if FRONTEND_DIST.is_dir():
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
