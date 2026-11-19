@@ -44,6 +44,8 @@ Writes: nothing
 import argparse
 import difflib
 import sys
+import threading
+import weakref
 
 import geopandas as gpd
 import networkx as nx
@@ -124,19 +126,35 @@ def match_hotspot(text):
     return row.to_dict()
 
 
+NOMINATIM_MIN_DELAY_S = 1.1  # Nominatim usage policy: at most 1 request/second
+_geocode_lock = threading.Lock()
+_limited_geocode = None
+
+
+def _get_limited_geocode():
+    """One process-wide rate-limited Nominatim geocoder (created lazily, reused
+    by every call -- the limit is only enforced if the limiter object persists)."""
+    global _limited_geocode
+    if _limited_geocode is None:
+        geolocator = Nominatim(user_agent=USER_AGENT)
+        _limited_geocode = RateLimiter(geolocator.geocode, min_delay_seconds=NOMINATIM_MIN_DELAY_S)
+    return _limited_geocode
+
+
 def geocode_bounded(address):
     """Nominatim geocode, bounded to the Gurugram/NCR area (hotspots.csv's
     bounding box + buffer) so an ambiguous place name can't resolve
     somewhere far outside the coverage area."""
     min_lat, max_lat, min_lon, max_lon = _geocode_bbox()
-    geolocator = Nominatim(user_agent=USER_AGENT)
-    geocode_fn = RateLimiter(geolocator.geocode, min_delay_seconds=1.1)
     # geopy's Nominatim.geocode expects viewbox as two (lat, lon) point tuples.
-    location = geocode_fn(
-        address,
-        viewbox=[(max_lat, min_lon), (min_lat, max_lon)],
-        bounded=True,
-    )
+    # The lock serialises callers (FastAPI runs sync endpoints in a thread pool) so
+    # the single shared limiter really enforces the 1 request/second policy.
+    with _geocode_lock:
+        location = _get_limited_geocode()(
+            address,
+            viewbox=[(max_lat, min_lon), (min_lat, max_lon)],
+            bounded=True,
+        )
     if location is None:
         raise ValueError(f"FATAL: could not geocode '{address}' within the Gurugram/NCR area.")
     return location.latitude, location.longitude
@@ -210,6 +228,94 @@ def build_penalized_graph(graph, active_hotspots):
     return penalized, touched_edges_by_hotspot
 
 
+_graph_caches = weakref.WeakKeyDictionary()  # graph -> {"geoms": projected edge geometries, "buffers": {...}}
+_cache_lock = threading.RLock()
+
+
+def _edge_cache(graph):
+    """Projected edge geometries (geometry only, built once per graph per process)
+    plus a cache of buffer -> edge-id sets. Replaces the old per-request graph copy."""
+    with _cache_lock:
+        cache = _graph_caches.get(graph)
+        if cache is None:
+            # Project to a local metric CRS so buffer distances are real metres
+            # (UTM zone 43N covers Gurugram).
+            edges = ox.projection.project_gdf(ox.graph_to_gdfs(graph, nodes=False, edges=True))
+            cache = {"geoms": edges.geometry, "buffers": {}}
+            _graph_caches[graph] = cache
+        return cache
+
+
+def buffer_edges(graph, lat, lon, buffer_m):
+    """frozenset of (u, v, k) edge ids whose geometry intersects a circle of
+    buffer_m metres around (lat, lon). Depends only on the location and radius,
+    never on the day's tier, so it is computed once and reused across requests
+    and scenarios."""
+    cache = _edge_cache(graph)
+    key = (round(float(lat), 7), round(float(lon), 7), float(buffer_m))
+    with _cache_lock:
+        hit = cache["buffers"].get(key)
+        if hit is None:
+            geoms = cache["geoms"]
+            point = gpd.GeoSeries([Point(lon, lat)], crs="EPSG:4326").to_crs(geoms.crs)
+            positions = geoms.sindex.query(point.iloc[0].buffer(buffer_m), predicate="intersects")
+            hit = frozenset(geoms.index[positions])
+            cache["buffers"][key] = hit
+        return hit
+
+
+def build_edge_penalties(graph, active_hotspots, *, red_buffer_m=RED_BUFFER_M, yellow_buffer_m=YELLOW_BUFFER_M,
+                         red_penalty=RED_PENALTY, yellow_penalty=YELLOW_PENALTY):
+    """Returns (penalties, touched_by_hotspot). penalties maps an edge id to the
+    tuple of factors to apply, in hotspot order (an edge inside two buffers is
+    multiplied twice, exactly as build_penalized_graph does). No graph copy."""
+    penalties = {}
+    touched_by_hotspot = {}
+    for hs in active_hotspots:
+        if hs["tier"] not in ("RED", "YELLOW"):
+            continue
+        is_red = hs["tier"] == "RED"
+        touched = buffer_edges(graph, hs["lat"], hs["lon"], red_buffer_m if is_red else yellow_buffer_m)
+        touched_by_hotspot[hs["hotspot_id"]] = touched
+        factor = red_penalty if is_red else yellow_penalty
+        for edge_id in touched:
+            penalties.setdefault(edge_id, []).append(factor)
+    return penalties, touched_by_hotspot
+
+
+def penalty_weight_function(penalties):
+    """networkx weight function: travel_time x penalties, minimum over parallel
+    edges (the same rule nx applies for a string weight on a MultiDiGraph)."""
+    def weight(u, v, parallel_edges):
+        best = float("inf")
+        for k, data in parallel_edges.items():
+            w = data.get("travel_time", 1.0)
+            for factor in penalties.get((u, v, k), ()):
+                w = w * factor
+            if w < best:
+                best = w
+        return best
+    return weight
+
+
+def hotspots_near_path(graph, path, hotspots, *, red_buffer_m=RED_BUFFER_M, yellow_buffer_m=YELLOW_BUFFER_M,
+                       other_buffer_m=None):
+    """Every hotspot (GREEN and unscored included, not just RED/YELLOW) whose
+    buffer touches the route's edges. RED uses red_buffer_m, YELLOW uses
+    yellow_buffer_m and every other tier uses other_buffer_m (default: the
+    YELLOW buffer). Returns copies of the hotspot dicts plus 'buffer_m'."""
+    other = yellow_buffer_m if other_buffer_m is None else other_buffer_m
+    path_pairs = set(zip(path[:-1], path[1:]))
+    near = []
+    for hs in hotspots:
+        buffer_m = red_buffer_m if hs["tier"] == "RED" else (yellow_buffer_m if hs["tier"] == "YELLOW" else other)
+        touched = buffer_edges(graph, hs["lat"], hs["lon"], buffer_m)
+        touched_pairs = {(u, v) for u, v, k in touched} | {(v, u) for u, v, k in touched}
+        if touched_pairs & path_pairs:
+            near.append({**hs, "buffer_m": buffer_m})
+    return near
+
+
 def _min_weight_edge_data(graph, u, v, attr):
     """graph is a MultiDiGraph -- pick the parallel edge (u, v, k) with the
     lowest `attr`, matching what nx.shortest_path's weight actually used."""
@@ -225,27 +331,38 @@ def route_metrics(graph, path):
     return length_m, time_s
 
 
-def point_inside_hotspot_buffer(lat, lon, hotspot):
+def point_inside_hotspot_buffer(lat, lon, hotspot, red_buffer_m=RED_BUFFER_M, yellow_buffer_m=YELLOW_BUFFER_M):
     """True if (lat, lon) itself falls within hotspot's RED/YELLOW buffer
     radius. Used to distinguish 'you're starting inside a flood zone, there's
     nowhere better to go from here' from the ordinary 'no reroute needed'
     case -- those are very different situations and must not share a message."""
     if hotspot["tier"] not in ("RED", "YELLOW"):
         return False
-    buffer_m = RED_BUFFER_M if hotspot["tier"] == "RED" else YELLOW_BUFFER_M
+    buffer_m = red_buffer_m if hotspot["tier"] == "RED" else yellow_buffer_m
     return geodesic((lat, lon), (hotspot["lat"], hotspot["lon"])).meters <= buffer_m
 
 
-def plan_route(origin_latlon, dest_latlon, active_hotspots):
-    graph = load_road_graph()
+def plan_route(origin_latlon, dest_latlon, active_hotspots, *, red_buffer_m=RED_BUFFER_M,
+               yellow_buffer_m=YELLOW_BUFFER_M, red_penalty=RED_PENALTY, yellow_penalty=YELLOW_PENALTY,
+               include_proximity=False, graph=None):
+    """Buffers and penalties default to the module constants, so existing callers
+    (the web /api/route) behave exactly as before. Per-request overrides (e.g.
+    yellow_penalty=1 for 'balanced') never touch module state. include_proximity
+    adds 'normal_near_hotspots' / 'flood_aware_near_hotspots' (every hotspot,
+    GREEN included, near each route) for the expected-time maths."""
+    if graph is None:
+        graph = load_road_graph()
     orig_node = ox.distance.nearest_nodes(graph, origin_latlon[1], origin_latlon[0])
     dest_node = ox.distance.nearest_nodes(graph, dest_latlon[1], dest_latlon[0])
 
     normal_path = nx.shortest_path(graph, orig_node, dest_node, weight="travel_time")
     normal_length_m, normal_time_s = route_metrics(graph, normal_path)
 
-    penalized_graph, touched_edges_by_hotspot = build_penalized_graph(graph, active_hotspots)
-    flood_aware_path = nx.shortest_path(penalized_graph, orig_node, dest_node, weight="travel_time")
+    # No graph copy: precomputed buffer edge sets + a weight function (see 5c in MOBILE_APP_PLAN).
+    penalties, touched_edges_by_hotspot = build_edge_penalties(
+        graph, active_hotspots, red_buffer_m=red_buffer_m, yellow_buffer_m=yellow_buffer_m,
+        red_penalty=red_penalty, yellow_penalty=yellow_penalty)
+    flood_aware_path = nx.shortest_path(graph, orig_node, dest_node, weight=penalty_weight_function(penalties))
     # Report real-world (unpenalized) cost of the flood-aware path for an honest comparison.
     flood_aware_length_m, flood_aware_time_s = route_metrics(graph, flood_aware_path)
 
@@ -273,10 +390,12 @@ def plan_route(origin_latlon, dest_latlon, active_hotspots):
     # is reported separately so the product can give an honest message
     # ("you're starting inside the risk, not just near it") instead of a
     # plain "no reroute needed" that would misleadingly imply no risk nearby.
-    origin_inside = [hs for hs in active_hotspots if point_inside_hotspot_buffer(*origin_latlon, hs)]
-    dest_inside = [hs for hs in active_hotspots if point_inside_hotspot_buffer(*dest_latlon, hs)]
+    origin_inside = [hs for hs in active_hotspots
+                     if point_inside_hotspot_buffer(*origin_latlon, hs, red_buffer_m, yellow_buffer_m)]
+    dest_inside = [hs for hs in active_hotspots
+                   if point_inside_hotspot_buffer(*dest_latlon, hs, red_buffer_m, yellow_buffer_m)]
 
-    return {
+    result = {
         "normal_route": {"path": normal_path, "length_m": normal_length_m, "time_s": normal_time_s},
         "flood_aware_route": {"path": flood_aware_path, "length_m": flood_aware_length_m, "time_s": flood_aware_time_s},
         "avoided_hotspots": avoided_hotspots,
@@ -284,6 +403,11 @@ def plan_route(origin_latlon, dest_latlon, active_hotspots):
         "origin_inside_hotspots": origin_inside,
         "dest_inside_hotspots": dest_inside,
     }
+    if include_proximity:
+        near_kwargs = {"red_buffer_m": red_buffer_m, "yellow_buffer_m": yellow_buffer_m}
+        result["normal_near_hotspots"] = hotspots_near_path(graph, normal_path, active_hotspots, **near_kwargs)
+        result["flood_aware_near_hotspots"] = hotspots_near_path(graph, flood_aware_path, active_hotspots, **near_kwargs)
+    return result
 
 
 def main():

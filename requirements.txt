@@ -18,3 +18,4 @@ networkx
 scipy
 fastapi
 uvicorn[standard]
+pytest
