@@ -1,6 +1,6 @@
-pandas
-numpy
-scikit-learn
+pandas==3.1.1
+numpy==2.4.6
+scikit-learn==1.9.1
 requests
 rasterio
 # richdem omitted: no prebuilt wheel for this platform/Python version, and
@@ -8,14 +8,14 @@ rasterio
 # Phase 3 uses the numpy.gradient fallback for slope instead.
 elevation
 matplotlib
-joblib
+joblib==1.6.0
 python-dotenv
 osmnx
 geopy
 geopandas
 shapely
 networkx
-scipy
+scipy==1.17.1
 fastapi
 uvicorn[standard]
 pytest
