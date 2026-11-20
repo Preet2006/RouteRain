@@ -19,6 +19,7 @@ from geopy.distance import geodesic
 from pydantic import BaseModel, Field
 
 from config import FLOOD_DELAY_MIN, MOBILE_REPLAY_DATES, ROUTE_CACHE_TTL_MIN
+from src import narrate as narration
 from src import route_planner
 from src.advice import build_advice, replay_date_label
 from src.places import geocode_place, load_places, search_places
@@ -67,7 +68,7 @@ def model_loaded() -> bool:
 
 
 def llm_available() -> bool:
-    return False  # LLM narration arrives in Phase W2
+    return narration.llm_available()
 
 
 # ---- scenario -> 12 hotspot items --------------------------------------------------------
@@ -305,8 +306,10 @@ class NarrateRequest(BaseModel):
 
 @router.post("/narrate")
 def narrate(body: NarrateRequest):
-    """Template narration for now (the LLM arrives in Phase W2). Hindi has no template yet, so the
-    English text comes back and `language` says so."""
+    """Spoken advice for a cached route. The LLM (if configured) only phrases the backend's facts and
+    every number it writes is checked; on any problem the template sentence comes back instead.
+    `language` is the language of the returned text (Hindi falls back to English templates)."""
     route = _fetch(body.route_id)
-    return {"text": route["template_advice"], "source": "template", "language": "en",
+    result = narration.narrate(body.route_id, route, body.language, body.user_name)
+    return {"text": result["text"], "source": result["source"], "language": result["language"],
             "scenario": route["scenario"]}

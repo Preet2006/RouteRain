@@ -218,7 +218,8 @@ def test_route_input_validation(world):
 
 # ---- /narrate ----------------------------------------------------------------------------------------
 
-def test_narrate_returns_template_advice(world):
+def test_narrate_returns_template_advice(world, monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "none")  # never call a real provider from tests
     j = client.post("/api/v2/route", json=body()).json()
     r = client.post("/api/v2/narrate", json={"route_id": j["route_id"], "user_name": "Tanish", "language": "hi"})
     assert r.status_code == 200
