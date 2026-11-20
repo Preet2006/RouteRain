@@ -24,7 +24,7 @@ from src.predict import (compute_forecast_season_cumulative, load_flood_rate_pri
                          load_infrastructure_flags, load_model, predict_for_hotspot,
                          predict_risk)
 from src.route_planner import load_road_graph, plan_route, resolve_location, warm_up
-from app.mobile_api import router as mobile_router
+from app.web_api import router as web_router
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = ROOT / "frontend" / "dist"
@@ -224,8 +224,8 @@ def create_route(body: RouteRequest):
         raise HTTPException(502, "Route could not be computed. Check the address and try again.") from exc
 
 
-# Must come BEFORE the static "/" mount below, which would otherwise swallow /mobile/v1/*.
-app.include_router(mobile_router)
+# Must come BEFORE the static "/" mount below, which would otherwise swallow /api/v2/*.
+app.include_router(web_router)
 
 if FRONTEND_DIST.is_dir():
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")

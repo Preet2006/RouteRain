@@ -37,13 +37,13 @@ def hotspot_delay_min(hotspot, flood_delay_min):
     if p is None:
         return 0.0
     if not 0.0 <= p <= 1.0:
-        raise ValueError(f"probability out of range for {hotspot.get('hotspot_id')}: {p}")
+        raise ValueError(f"probability out of range for {hotspot.get('hotspot_id', hotspot.get('id'))}: {p}")
     return p * flood_delay_min
 
 
 def expected_delay_min(near_hotspots, flood_delay_min):
     """Sum of hotspot_delay_min over the hotspots near one route."""
-    ids = [h.get("hotspot_id") for h in near_hotspots]
+    ids = [h.get("hotspot_id", h.get("id")) for h in near_hotspots]  # API items use "id"
     if len(ids) != len(set(ids)):
         raise ValueError(f"a hotspot is listed twice for one route: {ids}")
     return math.fsum(hotspot_delay_min(h, flood_delay_min) for h in near_hotspots)

@@ -81,3 +81,10 @@ def test_bad_inputs_fail_loudly():
         expected_delay_min([hs("H01", "RED", 0.5), hs("H01", "RED", 0.5)], D)
     with pytest.raises(ValueError):
         expected_time_min(-1.0, [], D)
+
+
+def test_two_hotspots_on_one_route_with_api_style_ids():
+    near = [{"id": "H02", "tier": "RED", "probability": 0.4}, {"id": "H07", "tier": "YELLOW", "probability": 0.2}]
+    assert expected_delay_min(near, D) == pytest.approx(0.6 * D)
+    with pytest.raises(ValueError):
+        expected_delay_min([near[0], near[0]], D)
