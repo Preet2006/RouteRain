@@ -114,3 +114,39 @@ body.rr {
   .rr-nav { margin-left: 0; width: 100%; }
   .rr-main { padding: 16px 12px; }
 }
+
+/* ---- forms ---- */
+.rr-field { display: grid; gap: 6px; margin: 0 0 16px; text-align: left; position: relative; }
+.rr-field label, .rr-fieldset legend { font-weight: 600; color: var(--rr-soft); }
+.rr-field input[type='text'] {
+  min-height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--rr-line);
+  background: var(--rr-panel-raised); color: var(--rr-text); font: inherit; width: 100%;
+}
+.rr-field input::placeholder { color: var(--rr-muted); }
+.rr-field-row { display: flex; gap: 8px; }
+.rr-field-error { color: var(--rr-red); }
+.rr-link { background: none; border: 0; color: var(--rr-accent); text-align: left; padding: 8px 0; min-height: 44px; font: inherit; cursor: pointer; text-decoration: underline; }
+.rr-link:disabled { opacity: 0.6; cursor: wait; }
+.rr-suggest { list-style: none; margin: 0; padding: 4px; border: 1px solid var(--rr-line); border-radius: 10px; background: var(--rr-panel); }
+.rr-suggest button {
+  width: 100%; min-height: 44px; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  background: none; border: 0; color: var(--rr-text); font: inherit; padding: 0 10px; border-radius: 8px; cursor: pointer; text-align: left;
+}
+.rr-suggest button:hover { background: var(--rr-panel-raised); }
+.rr-suggest small { color: var(--rr-muted); }
+.rr-fieldset { border: 1px solid var(--rr-line); border-radius: var(--rr-radius); padding: 14px 16px; margin: 0 0 16px; text-align: left; }
+.rr-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.rr-check input { width: 20px; height: 20px; accent-color: var(--rr-accent); }
+.rr-choice { align-items: flex-start; padding: 6px 0; }
+.rr-choice span { display: grid; }
+.rr-choice small { color: var(--rr-muted); }
+.rr-radios { display: flex; gap: 20px; flex-wrap: wrap; }
+.rr-note { border: 1px solid #4a4326; background: #1d1b12; color: #d8c98a; border-radius: 10px; padding: 10px 14px; margin: 8px 0 12px; }
+.rr-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; justify-content: center; }
+.rr-btn.quiet { background: none; border-color: transparent; color: var(--rr-soft); text-decoration: underline; }
+.rr-btn.danger { background: #3a1820; border-color: var(--rr-red); color: #ffd5db; }
+.rr-confirm { border: 1px solid #5a2a35; border-radius: var(--rr-radius); padding: 14px 16px; background: #1d1014; }
+.rr-setup .rr-hero, .rr-setup > div { max-width: 560px; width: 100%; }
+.rr-setup .rr-actions { justify-content: flex-start; }
+.rr .rr-card ul { padding-left: 20px; }
+.rr .rr-card li { margin-bottom: 6px; }

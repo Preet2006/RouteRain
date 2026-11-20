@@ -1,6 +1,10 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+
+import { useProfile } from '@/lib/useProfile';
 
 export function Welcome() {
+  const { profile } = useProfile();
+  if (profile.onboarded) return <Navigate to="/" replace />;
   return (
     <div className="rr-hero">
       <div>

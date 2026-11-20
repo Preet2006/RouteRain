@@ -3,7 +3,9 @@ import { Route, Routes } from 'react-router-dom';
 
 import { BareLayout, Shell } from '@/components/Shell';
 import { Home } from '@/pages/Home';
-import { About, NotFound, Plan, RouteResult, Settings } from '@/pages/Placeholders';
+import { About } from '@/pages/About';
+import { NotFound, Plan, RouteResult } from '@/pages/Placeholders';
+import { Settings } from '@/pages/Settings';
 import { Setup } from '@/pages/Setup';
 import { Welcome } from '@/pages/Welcome';
 
