@@ -37,7 +37,7 @@ export function Shell() {
       </main>
       <footer className="rr-footer">
         <span>A guide, not a guarantee.</span>
-        <span>RouteRain · Gurugram</span>
+        <span>RouteRain · Gurugram · <Link to="/legacy">Original dashboard</Link></span>
       </footer>
     </div>
   );

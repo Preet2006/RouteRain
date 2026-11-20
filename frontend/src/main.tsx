@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
 import { App } from './App';
+import { ScenarioProvider } from './lib/scenario';
 import './styles/base.css';
 
 const queryClient = new QueryClient({
@@ -14,7 +15,9 @@ createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <ScenarioProvider>
+          <App />
+        </ScenarioProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

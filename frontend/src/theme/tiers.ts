@@ -3,7 +3,7 @@
  * Colour is never the only signal (PLAN.md colour-blind rule): every tier also has a distinct
  * word and a distinct glyph shape.
  */
-import { colors } from './tokens';
+import { colors } from './tokens.ts';
 
 export type Tier = 'RED' | 'YELLOW' | 'GREEN' | 'LOW_RAIN';
 

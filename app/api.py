@@ -5,6 +5,7 @@ import datetime as dt
 import math
 import os
 import sys
+import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -34,6 +35,17 @@ TERRAIN = os.path.join(PROCESSED_DIR, "terrain_features.csv")
 TRAINING = os.path.join(PROCESSED_DIR, "training_data.csv")
 
 
+def prefetch_scores():
+    """Background, after startup: score every replay day (local, ~10 s) and fetch today's forecast (network,
+    ~25 s) so the first visitor does not wait for either. Failures are ignored: the endpoints retry on demand.
+    Set ROUTERAIN_SKIP_PREFETCH=1 to turn this off."""
+    for label, fn in (("replay history", lambda: historical_scenarios()), ("live forecast", lambda: dashboard_data())):
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001 - best effort only
+            print(f"WARNING: prefetch of {label} skipped: {type(exc).__name__}", file=sys.stderr)
+
+
 @asynccontextmanager
 async def lifespan(_app):
     """Load the road graph and build the routing caches at startup (about 10 s) so the first
@@ -45,6 +57,8 @@ async def lifespan(_app):
             warm_up()
         except FileNotFoundError as exc:
             print(f"WARNING: startup warm-up skipped: {exc}", file=sys.stderr)
+    if os.environ.get("ROUTERAIN_SKIP_PREFETCH") != "1" and os.environ.get("ROUTERAIN_SKIP_WARMUP") != "1":
+        threading.Thread(target=prefetch_scores, name="prefetch", daemon=True).start()
     yield
 
 
@@ -122,10 +136,10 @@ def dashboard_data():
             result = predict_for_hotspot(bundle, terrain.loc[hs.hotspot_id], priors.loc[hs.hotspot_id],
                 infra.loc[hs.hotspot_id], hs.hotspot_id, row.date, row.rain_24h, row.rain_max_1h,
                 row.rain_max_3h, row.rain_prev_3d, row.rain_season_cumulative, row.soil_moisture_surface)
-            result.update(name=hs.name, lat=float(hs.lat), lon=float(hs.lon))
+            result.update(name=hs["name"], lat=float(hs.lat), lon=float(hs.lon))
             soil = soil_moisture_label(result["features"]["soil_moisture_surface"], training)
             hit = hits.loc[hs.hotspot_id] if hs.hotspot_id in hits.index else {"floods": 0, "rain_days": 0}
-            result["explanation"] = build_explanation(hs.name, result["tier"], result["probability"],
+            result["explanation"] = build_explanation(hs["name"], result["tier"], result["probability"],
                 result["features"], thresholds, soil, result["features"]["hotspot_flood_rate_prior"], cutoff,
                 int(hit["floods"]), int(hit["rain_days"]))
             results.append(result)

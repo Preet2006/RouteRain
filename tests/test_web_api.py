@@ -304,3 +304,53 @@ def test_spa_static_files_fall_back_to_index_for_page_urls_only(tmp_path):
         assert r.status_code == 200 and r.text == "<html>spa</html>", page
     assert c.get("/assets/missing.js").status_code == 404
     assert c.get("/api/nothing").status_code == 404
+
+
+def test_prefetch_scores_replay_history_then_live_and_survives_failures(monkeypatch, capsys):
+    import app.api as api
+    calls = []
+    monkeypatch.setattr(api, "historical_scenarios", lambda: calls.append("history"))
+
+    def live_fails():
+        calls.append("live")
+        raise RuntimeError("no network")
+    monkeypatch.setattr(api, "dashboard_data", live_fails)
+    api.prefetch_scores()
+    assert calls == ["history", "live"]  # a failing live fetch does not raise
+    assert "prefetch of live forecast skipped" in capsys.readouterr().err
+
+
+def test_lifespan_starts_prefetch_only_when_enabled(monkeypatch):
+    import app.api as api
+    started = []
+    monkeypatch.setattr(api, "prefetch_scores", lambda: started.append(1))
+    monkeypatch.setattr(api, "warm_up", lambda: None)
+    monkeypatch.delenv("ROUTERAIN_SKIP_WARMUP", raising=False)
+    monkeypatch.setenv("ROUTERAIN_SKIP_PREFETCH", "1")
+    with TestClient(app):
+        pass
+    assert started == []
+    monkeypatch.setenv("ROUTERAIN_SKIP_PREFETCH", "0")
+    with TestClient(app):
+        pass
+    import time
+    time.sleep(0.2)
+    assert started == [1]
+
+
+@needs_model
+def test_live_dashboard_uses_hotspot_names_not_row_numbers(monkeypatch):
+    """Regression: `hs.name` on a pandas row is the row INDEX, so live hotspots were named 0, 1, 2 ..."""
+    import pandas as pd
+    import app.api as api
+    from config import PROCESSED_DIR
+    forecast = pd.read_csv(os.path.join(PROCESSED_DIR, "weather_forecast.csv"))
+    monkeypatch.setattr(api, "collect_forecast", lambda hotspots: forecast.copy())
+    monkeypatch.setitem(api._forecast_cache, "rows", None)
+    names = {h["hotspot_id"]: h["name"] for h in api.dashboard_data()["hotspots"]}
+    assert names["H02"] == "Rajiv Chowk" and all(isinstance(n, str) and not n.isdigit() for n in names.values())
+    monkeypatch.setattr(web, "_live_data", lambda: ([h for h in api._forecast_cache["rows"]], "now"))
+    r = client.get("/api/v2/hotspots").json()
+    assert {h["name"] for h in r["hotspots"]} >= {"Rajiv Chowk", "Hero Honda Chowk"}
+    assert all(h["explanation"].startswith(h["name"]) for h in r["hotspots"])
+    monkeypatch.setitem(api._forecast_cache, "rows", None)  # leave no fake data cached for other tests

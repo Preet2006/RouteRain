@@ -25,7 +25,13 @@ vi.mock('@/api/client', () => ({
       : [],
   })),
   geocodePlace: vi.fn().mockResolvedValue({ lat: 28.47, lon: 77.04, label: 'Somewhere' }),
+  getScenarios: vi.fn().mockResolvedValue({ default_mode: 'live', scenarios: [] }),
+  getHotspots: vi.fn().mockResolvedValue({
+    scenario: { mode: 'live', date: null, forecast_generated_at: null },
+    tiers: { RED: 0, YELLOW: 0, GREEN: 0, LOW_RAIN: 0 }, hotspots: [],
+  }),
 }));
+vi.mock('@/features/home/HotspotMap', () => ({ HotspotMap: () => null }));
 
 vi.mock('@/lib/speech', () => ({
   speech: {
@@ -43,6 +49,7 @@ vi.mock('@/lib/speech', () => ({
 }));
 
 import { App } from '@/App';
+import { ScenarioProvider } from '@/lib/scenario';
 import { STORAGE_KEY, profileStore } from '@/lib/storage';
 
 function renderAt(path: string) {
@@ -50,7 +57,9 @@ function renderAt(path: string) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
-        <App />
+        <ScenarioProvider>
+          <App />
+        </ScenarioProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
