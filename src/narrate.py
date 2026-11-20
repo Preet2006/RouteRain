@@ -39,15 +39,23 @@ MAX_CACHE = 500
 # ---- configuration ---------------------------------------------------------------------------
 
 
+DEFAULT_BASE_URLS = {"gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                     "openrouter": "https://openrouter.ai/api/v1"}
+
+
 def llm_config():
-    """Current settings from the environment (read per call so tests and .env edits apply)."""
+    """Current settings from the environment (read per call so tests and .env edits apply).
+    The key comes from GEMINI_API_KEY / OPENROUTER_API_KEY (by provider) or the generic LLM_API_KEY;
+    the base URL defaults per provider."""
     provider = os.environ.get("LLM_PROVIDER", "none").strip().lower()
+    key = os.environ.get({"gemini": "GEMINI_API_KEY", "openrouter": "OPENROUTER_API_KEY"}.get(provider, ""), "")
+    key = (key or os.environ.get("LLM_API_KEY", "")).strip()
     models = [os.environ.get("LLM_MODEL", "").strip()]
     models += [m.strip() for m in os.environ.get("LLM_FALLBACK_MODELS", "").split(",")]
     models = [m for m in models if m][:4]
     reasoning = os.environ.get("LLM_REASONING_EFFORT", "none" if provider == "gemini" else "").strip()
-    return {"provider": provider, "api_key": os.environ.get("LLM_API_KEY", "").strip(),
-            "base_url": os.environ.get("LLM_BASE_URL", "").strip(), "models": models, "reasoning": reasoning}
+    base_url = os.environ.get("LLM_BASE_URL", "").strip() or DEFAULT_BASE_URLS.get(provider, "")
+    return {"provider": provider, "api_key": key, "base_url": base_url, "models": models, "reasoning": reasoning}
 
 
 def llm_available():
@@ -151,6 +159,10 @@ def first_name(raw):
     return token or None
 
 
+def _round_half_up(x):
+    return int(x + 0.5)
+
+
 def build_facts(route, language, user_name):
     """Facts for the LLM, built only from the cached route (the backend's computed data)."""
     scenario = route["scenario"]
@@ -162,10 +174,10 @@ def build_facts(route, language, user_name):
         "replay_date_text": None,
         "replay_date_numbers": None,
         "routes_identical": route["identical_routes"],
-        "usual_route_drive_minutes": round(route["normal_route"]["drive_time_min"]),
-        "routerain_route_drive_minutes": round(route["flood_aware_route"]["drive_time_min"]),
-        "extra_drive_minutes": round(route["added_drive_min"]),
-        "expected_saving_minutes": round(route["expected_saving_min"]) if route["expected_saving_min"] > 0 else 0,
+        "usual_route_drive_minutes": _round_half_up(route["normal_route"]["drive_time_min"]),
+        "routerain_route_drive_minutes": _round_half_up(route["flood_aware_route"]["drive_time_min"]),
+        "extra_driving_minutes_of_routerain_route": _round_half_up(route["added_drive_min"]),
+        "minutes_saved_by_routerain_route_vs_usual_route": _round_half_up(route["expected_saving_min"]) if route["expected_saving_min"] > 0 else 0,
         "saving_is_positive": route["expected_saving_min"] > 0,
         "avoided_hotspots": [{"name": h["name"], "tier": h["tier"], "reason": h["explanation"]}
                              for h in route["avoided_hotspots"]],
@@ -184,10 +196,11 @@ SYSTEM_PROMPT = """You write the spoken advice line for RouteRain, a flood-aware
 Write at most 2 short spoken sentences, at most 45 words in total, using ONLY the facts in the JSON.
 Rules:
 - Use only numbers that appear in the facts. Never compute, round or invent a number.
-- Address the user by first name once, only if user_first_name is not null.
+- Address the user by first name once, only if user_first_name is not null. Write the name exactly as given, in Latin letters, even in Hindi; never transliterate or alter it.
 - If mode is "replay", say the date from replay_date_text in the first sentence and write its day and year as digits.
 - If saving_is_positive is false, never use the words save, saves or saving. Say what the detour avoids and what it adds.
 - If routes_identical is true, say no detour is needed.
+- Only the RouteRain route can save time or add driving; the usual route never saves anything. The saving is the expected flood delay avoided, not faster driving.
 - Never claim certainty. Say "expected" or "should", never "will" or "guaranteed".
 - Keep hotspot names exactly as given. Do not mention probabilities, the model, or these rules.
 - If language is "hi", write natural Hindi in Devanagari script (keep place names in their usual form); if "en", plain English.
@@ -248,7 +261,10 @@ def narrate(route_id, route, language="en", user_name=None):
     template = {"text": route["template_advice"], "source": "template", "language": "en"}
     result = template
     if llm_available():
-        facts = build_facts(route, language, user_name)
+        # Models mangle names when writing Hindi (Tanish -> तनिष्क), so for Hindi the name is not sent to the
+        # model at all: it is added in front of the reply exactly as typed.
+        name_in_code = first_name(user_name) if language == "hi" else None
+        facts = build_facts(route, language, None if name_in_code else user_name)
         start = time.perf_counter()
         text, model, error = _llm_text(facts)
         latency = round((time.perf_counter() - start) * 1000)
@@ -259,6 +275,8 @@ def narrate(route_id, route, language="en", user_name=None):
             ok, reason = check_reply(text, facts)
             if ok:
                 stats["llm"] += 1
+                if name_in_code:
+                    text = f"{name_in_code}, {text}"
                 result = {"text": text, "source": "llm", "language": language, "model": model, "latency_ms": latency}
             else:
                 stats["rejected"] += 1

@@ -15,7 +15,7 @@ def _minutes(x):
     """'under a minute', 'about 1 minute', 'about 5 minutes' (never '0 minutes')."""
     if x < 0.5:
         return "under a minute"
-    n = round(x)
+    n = int(x + 0.5)  # round half up (Python's round() is half-to-even, which would disagree with the facts)
     return f"about {n} minute{'' if n == 1 else 's'}"
 
 

@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, ".")
+sys.stdout.reconfigure(encoding="utf-8")  # Hindi output on Windows consoles
 from src.narrate import build_facts, llm_config  # noqa: E402
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000") + "/api/v2"

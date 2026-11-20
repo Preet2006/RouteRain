@@ -43,7 +43,8 @@ class FakeClient:
 @pytest.fixture
 def llm(monkeypatch):
     for k, v in {"LLM_PROVIDER": "gemini", "LLM_API_KEY": "k", "LLM_BASE_URL": "http://x/",
-                 "LLM_MODEL": "m1", "LLM_FALLBACK_MODELS": "", "LLM_REASONING_EFFORT": ""}.items():
+                 "LLM_MODEL": "m1", "LLM_FALLBACK_MODELS": "", "LLM_REASONING_EFFORT": "",
+                 "GEMINI_API_KEY": "k", "OPENROUTER_API_KEY": "k"}.items():
         monkeypatch.setenv(k, v)
     nr.clear_cache()
     holder = {}
@@ -114,10 +115,10 @@ def test_too_long_or_empty_replies_are_rejected(llm):
 
 
 def test_hindi_reply_with_devanagari_digits_and_date(llm):
-    reply = "७ अगस्त २०२६ को टनिश, यह रास्ता लगभग १ मिनट ज़्यादा लेता है पर राजीव चौक से बचाता है, लगभग ८ मिनट की बचत।"
+    reply = "७ अगस्त २०२६ को यह रास्ता लगभग १ मिनट ज़्यादा लेता है पर राजीव चौक से बचाता है, लगभग ८ मिनट की बचत।"
     llm([reply])
     r = nr.narrate("r8", ROUTE, "hi", "Tanish")
-    assert r["source"] == "llm" and r["language"] == "hi" and r["text"] == reply
+    assert r["source"] == "llm" and r["language"] == "hi" and r["text"] == "Tanish, " + reply
 
 
 def test_template_fallback_reports_english_for_hindi_requests(llm):
@@ -187,7 +188,14 @@ def test_provider_none_gives_template_without_any_client(monkeypatch):
 
 def test_missing_key_or_model_means_unavailable(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "gemini")
-    monkeypatch.setenv("LLM_API_KEY", "")
+    for k in ("LLM_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.setenv(k, "")
+    monkeypatch.setenv("LLM_MODEL", "m1")
+    monkeypatch.setenv("LLM_FALLBACK_MODELS", "")
+    assert not nr.llm_available()
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    assert nr.llm_available()
+    monkeypatch.setenv("LLM_MODEL", "")
     assert not nr.llm_available()
 
 
@@ -198,8 +206,16 @@ def test_no_model_ids_are_hardcoded():
 
 def test_env_example_parses_with_empty_values():
     env = dotenv_values(os.path.join(os.path.dirname(nr.__file__), "..", ".env.example"))
-    assert env["LLM_PROVIDER"] == "none" and env["LLM_API_KEY"] == "" and env["LLM_MODEL"] == ""
-    assert env["LLM_BASE_URL"].startswith("https://generativelanguage.googleapis.com")
+    assert env["LLM_PROVIDER"] == "none" and env["GEMINI_API_KEY"] == "" and env["OPENROUTER_API_KEY"] == ""
+    assert env["LLM_MODEL"] == ""
+
+
+def test_base_url_defaults_per_provider(monkeypatch):
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "openrouter")
+    assert nr.llm_config()["base_url"] == "https://openrouter.ai/api/v1"
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    assert nr.llm_config()["base_url"].startswith("https://generativelanguage.googleapis.com")
 
 
 # ---- the endpoint -------------------------------------------------------------------------------------------
@@ -217,3 +233,10 @@ def test_narrate_endpoint_uses_the_llm_and_reports_the_source(llm, monkeypatch):
         assert c.get("/api/v2/health").json()["llm_available"] is True
     finally:
         web._routes.pop("abc123abc123", None)
+
+
+def test_hindi_name_is_added_by_code_and_never_sent_to_the_model(llm):
+    c = llm(["७ अगस्त २०२६ को यह रास्ता लगभग १ मिनट ज़्यादा लेता है।"])
+    r = nr.narrate("r16", ROUTE, "hi", "Tanish Sharma")
+    assert r["text"].startswith("Tanish, ") and "Sharma" not in r["text"]
+    assert "Tanish" not in c.calls[0]["messages"][1]["content"]
