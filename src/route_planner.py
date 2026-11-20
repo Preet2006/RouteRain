@@ -65,6 +65,7 @@ from src.polyline import simplify_polyline
 import os
 
 ROAD_GRAPH_PATH = os.path.join(EXTERNAL_DIR, "road_graph.graphml")
+METRIC_CRS = "EPSG:32643"  # UTM zone 43N, metres
 RED_BUFFER_M = 500
 YELLOW_BUFFER_M = 300
 RED_PENALTY = 15
@@ -243,7 +244,9 @@ def _edge_cache(graph):
         if cache is None:
             # Project to a local metric CRS so buffer distances are real metres
             # (UTM zone 43N covers Gurugram).
-            edges = ox.projection.project_gdf(ox.graph_to_gdfs(graph, nodes=False, edges=True))
+            # Fixed UTM zone 43N: osmnx's project_gdf would union all 124k road lines just to pick the zone
+            # (slow, and it spikes memory). Gurugram (77 E) is always zone 43N, the same CRS it would choose.
+            edges = ox.graph_to_gdfs(graph, nodes=False, edges=True).to_crs(METRIC_CRS)
             cache = {"geoms": edges.geometry, "buffers": {}}
             _graph_caches[graph] = cache
         return cache

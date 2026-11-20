@@ -260,7 +260,8 @@ def test_existing_routes_unchanged_and_v2_precedes_static_mount():
     assert len(included) == 1
     assert all(i > included[0] for i, r in enumerate(app.routes) if isinstance(r, Mount) and r.path in ("", "/"))
     assert client.post("/api/route", json={"origin": "", "destination": "x"}).status_code == 422
-    assert client.get("/mobile/v1/health").status_code == 404  # old prefix is gone
+    old = client.get("/mobile/v1/health")  # the old JSON API is gone (a built site may answer with its HTML shell)
+    assert old.status_code in (404, 200) and "model_loaded" not in old.text
 
 
 def test_startup_can_be_skipped_and_survives_missing_graph(monkeypatch):
@@ -283,3 +284,23 @@ def test_startup_can_be_skipped_and_survives_missing_graph(monkeypatch):
 def test_real_startup_loads_the_graph():
     with TestClient(app) as c:
         assert c.get("/api/v2/health").json()["graph_loaded"] is True
+
+
+# ---- single-page-app static hosting ------------------------------------------------------------------------
+
+def test_spa_static_files_fall_back_to_index_for_page_urls_only(tmp_path):
+    from fastapi import FastAPI
+    from app.api import SPAStaticFiles
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<html>spa</html>")
+    (tmp_path / "assets" / "app.js").write_text("console.log(1)")
+    site = FastAPI()
+    site.mount("/", SPAStaticFiles(directory=tmp_path, html=True), name="frontend")
+    c = TestClient(site)
+    assert c.get("/").text == "<html>spa</html>"
+    assert c.get("/assets/app.js").text == "console.log(1)"
+    for page in ("/route/abc123abc123", "/settings", "/legacy", "/welcome"):
+        r = c.get(page)
+        assert r.status_code == 200 and r.text == "<html>spa</html>", page
+    assert c.get("/assets/missing.js").status_code == 404
+    assert c.get("/api/nothing").status_code == 404

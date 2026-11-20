@@ -14,6 +14,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
 
 from config import HOTSPOTS_CSV, PROCESSED_DIR, GREEN_MAX, YELLOW_MAX
@@ -227,5 +228,21 @@ def create_route(body: RouteRequest):
 # Must come BEFORE the static "/" mount below, which would otherwise swallow /api/v2/*.
 app.include_router(web_router)
 
+class SPAStaticFiles(StaticFiles):
+    """Serves the built React site. Page URLs that only exist in the browser's router (/route/abc123,
+    /settings, ...) get index.html, so a refresh or a shared link works. Missing files (anything with an
+    extension, e.g. a stale /assets/x.js) and unknown /api/ paths stay real 404s."""
+
+    async def get_response(self, path, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            path = path.replace("\\", "/")  # Starlette hands Windows paths over with backslashes
+            last = path.rsplit("/", 1)[-1]
+            if exc.status_code == 404 and "." not in last and not path.startswith("api/"):
+                return await super().get_response("index.html", scope)
+            raise
+
+
 if FRONTEND_DIST.is_dir():
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+    app.mount("/", SPAStaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
