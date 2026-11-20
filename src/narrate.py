@@ -13,7 +13,8 @@ Configuration (.env, see .env.example): LLM_PROVIDER (gemini | openrouter | none
 LLM_BASE_URL, LLM_MODEL, LLM_FALLBACK_MODELS, LLM_REASONING_EFFORT. No model IDs are hardcoded.
 Only the user's first name and the route facts are sent to the provider.
 
-CLI:  python -m src.narrate --check     one test call to every configured model
+CLI:  python -m src.narrate --list-models  model IDs your key can use
+      python -m src.narrate --check        one test call to every configured model
 """
 from __future__ import annotations
 
@@ -293,9 +294,20 @@ def check_models():
     return out
 
 
+def list_models():
+    """Model IDs the configured key can use (needs only LLM_PROVIDER, LLM_API_KEY, LLM_BASE_URL)."""
+    cfg = llm_config()
+    if not (cfg["api_key"] and cfg["base_url"]):
+        raise SystemExit("Set LLM_API_KEY and LLM_BASE_URL in .env first.")
+    return sorted(m.id for m in _client(cfg).models.list())
+
+
 if __name__ == "__main__":
     import sys
-    if "--check" in sys.argv:
+    if "--list-models" in sys.argv:
+        for model_id in list_models():
+            print(model_id)
+    elif "--check" in sys.argv:
         for model, ok, detail in check_models():
             print(("OK   " if ok else "FAIL ") + model + "  " + detail)
     else:
