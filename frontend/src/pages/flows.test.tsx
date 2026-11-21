@@ -94,7 +94,7 @@ describe('first visit', () => {
 
     expect(await screen.findByText(/step 2 of 3/i)).toBeTruthy();
     await user.type(screen.getByRole('combobox', { name: /home/i }), 'cyber');
-    await user.click(await screen.findByRole('button', { name: /cyber hub/i }));
+    await user.click(await screen.findByRole('option', { name: /cyber hub/i }));
     expect(screen.getByText(/saved: 28\.4951, 77\.0891/i)).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Next' }));
 

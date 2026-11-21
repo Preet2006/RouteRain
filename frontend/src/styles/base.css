@@ -215,3 +215,23 @@ body.rr {
   .rr-home-map { order: -1; position: static; }
   .rr-map { height: 52vh; min-height: 320px; }
 }
+
+/* ---- plan a trip ---- */
+.rr-plan { display: grid; grid-template-columns: minmax(320px, 440px) 1fr; gap: 20px; align-items: start; }
+.rr-plan-form h1 { font-size: clamp(24px, 3.4vw, 34px); }
+.rr-plan-map { position: sticky; top: 12px; height: calc(100vh - 150px); min-height: 420px; }
+.rr-plan-map.picking .leaflet-container { cursor: crosshair; }
+.rr-pick-hint { top: 12px; left: 50%; transform: translateX(-50%); font-weight: 600; border-color: var(--rr-accent); }
+.rr-pin { transform: translate(-50%, -100%); width: 30px; height: 30px; border-radius: 50% 50% 50% 0; rotate: -45deg; display: grid; place-items: center; font: 700 14px 'DM Sans', sans-serif; color: #06101a; border: 2px solid #0b1118; box-shadow: 0 1px 6px rgba(0,0,0,.6); }
+.rr-pin.A { background: var(--rr-accent); } .rr-pin.B { background: #fff; }
+.rr-pin { text-align: center; }
+.rr-field-actions { display: flex; gap: 6px 18px; flex-wrap: wrap; }
+.rr-suggest li { display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 44px; padding: 0 10px; border-radius: 8px; cursor: pointer; }
+.rr-suggest li:hover, .rr-suggest li.active { background: var(--rr-panel-raised); outline: 1px solid var(--rr-accent); }
+.rr-swap { display: flex; justify-content: center; margin: -4px 0 8px; }
+.rr-chip[aria-pressed='true'] { border-color: var(--rr-accent); background: var(--rr-panel-raised); }
+.rr-find { width: 100%; }
+@media (max-width: 900px) {
+  .rr-plan { grid-template-columns: 1fr; }
+  .rr-plan-map { position: static; height: 46vh; min-height: 300px; }
+}
