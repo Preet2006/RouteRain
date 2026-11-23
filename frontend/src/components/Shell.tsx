@@ -47,5 +47,9 @@ export function Shell() {
 export function BareLayout() {
   useRrBody();
   useStopSpeechOnNavigate();
-  return <Outlet />;
+  return (
+    <main id="main">
+      <Outlet />
+    </main>
+  );
 }

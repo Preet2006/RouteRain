@@ -10,7 +10,7 @@ export type PickTarget = 'from' | 'to' | null;
 
 // Icon HTML is constant text only (a letter), never user input.
 const pin = (letter: 'A' | 'B') =>
-  L.divIcon({ className: 'rr-marker-wrap', html: `<div class="rr-pin ${letter}">${letter}</div>`, iconSize: [0, 0] });
+  L.divIcon({ className: 'rr-marker-wrap', html: `<div class="rr-pin ${letter}"><span>${letter}</span></div>`, iconSize: [0, 0] });
 const A = pin('A');
 const B = pin('B');
 

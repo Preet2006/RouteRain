@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Hotspot } from '@/api/schemas';
 
-import { HotspotMap } from './HotspotMap';
+import { HotspotMap, splitCore } from './HotspotMap';
 
 const spot = (n: number, tier: Hotspot['tier'], p: number | null): Hotspot => ({
   id: `H${String(n).padStart(2, '0')}`, name: `Spot ${n}`, lat: 28.4 + n / 100, lon: 77 + n / 100,
@@ -60,5 +60,31 @@ describe('HotspotMap', () => {
     const { container, getByRole } = render(<HotspotMap hotspots={[]} selectedId={null} onSelect={() => {}} loading />);
     expect(container.querySelectorAll('.rr-marker')).toHaveLength(0);
     expect(getByRole('status').textContent).toMatch(/loading hotspots/i);
+  });
+});
+
+
+describe('far-away hotspots', () => {
+  const far = { ...spot(99, 'RED', 0.5), name: 'Bilaspur Chowk', lat: 28.2886, lon: 76.8602 };
+  const withFar = [...TWELVE.slice(0, 11), far];
+
+  it('splitCore separates a hotspot ~30 km from the rest, and keeps a tight group whole', () => {
+    expect(splitCore(withFar).outside.map((h) => h.name)).toEqual(['Bilaspur Chowk']);
+    expect(splitCore(withFar).core).toHaveLength(11);
+    expect(splitCore(TWELVE).outside).toEqual([]);
+    expect(splitCore([far]).outside).toEqual([]); // fewer than 3: nothing to compare against
+  });
+
+  it('still draws a marker for it, and tells the user it is outside the view with a Show all button', () => {
+    const { container, getByRole } = render(<HotspotMap hotspots={withFar} selectedId={null} onSelect={() => {}} />);
+    expect(container.querySelectorAll('.rr-marker')).toHaveLength(12); // nothing is dropped
+    const note = getByRole('status');
+    expect(note.textContent).toMatch(/1 hotspot is outside this view: Bilaspur Chowk \(RED\)/);
+    expect(note.querySelector('button')!.textContent).toBe('Show all');
+  });
+
+  it('shows no such note when everything is close together', () => {
+    const { container } = render(<HotspotMap hotspots={TWELVE} selectedId={null} onSelect={() => {}} />);
+    expect(container.querySelector('.rr-outside')).toBeNull();
   });
 });

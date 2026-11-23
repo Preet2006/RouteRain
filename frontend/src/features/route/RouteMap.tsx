@@ -7,7 +7,7 @@ import type { RouteResponse } from '@/api/schemas';
 import { colors, GURUGRAM_CENTER, tierInfo } from '@/theme';
 
 const pin = (letter: 'A' | 'B') =>
-  L.divIcon({ className: 'rr-marker-wrap', html: `<div class="rr-pin ${letter}">${letter}</div>`, iconSize: [0, 0] });
+  L.divIcon({ className: 'rr-marker-wrap', html: `<div class="rr-pin ${letter}"><span>${letter}</span></div>`, iconSize: [0, 0] });
 const A = pin('A');
 const B = pin('B');
 

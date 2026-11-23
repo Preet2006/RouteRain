@@ -5,6 +5,7 @@ import { Home } from '@/pages/Home';
 import { About } from '@/pages/About';
 import { NotFound } from '@/pages/Placeholders';
 import { Plan } from '@/pages/Plan';
+import { Ready } from '@/pages/Ready';
 import { RouteResult } from '@/pages/RouteResult';
 import { Settings } from '@/pages/Settings';
 import { Setup } from '@/pages/Setup';
@@ -16,6 +17,7 @@ export function App() {
       <Route element={<BareLayout />}>
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/setup" element={<Setup />} />
+        <Route path="/ready" element={<Ready />} />
       </Route>
       <Route element={<Shell />}>
         <Route path="/" element={<Home />} />

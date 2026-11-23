@@ -89,7 +89,7 @@ describe('first visit', () => {
     await user.click(await screen.findByRole('link', { name: /get started/i }));
 
     expect(await screen.findByText(/step 1 of 3/i)).toBeTruthy();
-    await user.type(screen.getByLabelText(/what should we call you/i), 'Tanish');
+    await user.type(screen.getByLabelText(/what.s your name/i), 'Tanish');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     expect(await screen.findByText(/step 2 of 3/i)).toBeTruthy();
@@ -101,6 +101,14 @@ describe('first visit', () => {
     expect(await screen.findByText(/step 3 of 3/i)).toBeTruthy();
     await user.click(screen.getByRole('radio', { name: /balanced/i }));
     await user.click(screen.getByRole('button', { name: 'Finish' }));
+
+    // "Welcome, <name>" with what was saved, then one button into the app
+    expect((await screen.findByTestId('welcome-name')).textContent).toBe('Welcome, Tanish');
+    const summary = screen.getByRole('list', { name: /your settings/i }).textContent!;
+    expect(summary).toMatch(/Home: Cyber Hub/);
+    expect(summary).toMatch(/Voice advice: on, English/);
+    expect(summary).toMatch(/Caution: Balanced/);
+    await user.click(screen.getByRole('button', { name: /enter routerain/i }));
 
     expect(await screen.findByRole('heading', { name: /good (morning|afternoon|evening), tanish/i })).toBeTruthy();
     const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
@@ -117,7 +125,7 @@ describe('first visit', () => {
   it('Skip setup goes to Home with defaults and keeps nothing else', async () => {
     const user = userEvent.setup();
     renderAt('/setup');
-    await user.type(screen.getByLabelText(/what should we call you/i), 'Ignored');
+    await user.type(screen.getByLabelText(/what.s your name/i), 'Ignored');
     await user.click(screen.getByRole('button', { name: /skip setup/i }));
     expect(await screen.findByRole('heading', { name: /^good (morning|afternoon|evening)$/i })).toBeTruthy();
     expect(profileStore.get()).toMatchObject({ onboarded: true, name: '' });
@@ -132,10 +140,10 @@ describe('first visit', () => {
   it('Back keeps what was typed', async () => {
     const user = userEvent.setup();
     renderAt('/setup');
-    await user.type(screen.getByLabelText(/what should we call you/i), 'Aryan');
+    await user.type(screen.getByLabelText(/what.s your name/i), 'Aryan');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Back' }));
-    expect((screen.getByLabelText(/what should we call you/i) as HTMLInputElement).value).toBe('Aryan');
+    expect((screen.getByLabelText(/what.s your name/i) as HTMLInputElement).value).toBe('Aryan');
   });
 });
 
@@ -270,5 +278,24 @@ describe('about', () => {
     expect(page).toMatch(/a guide, not a guarantee/i);
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).getByRole('link', { name: 'About' }).getAttribute('aria-current')).toBe('page');
+  });
+});
+
+
+describe('welcome screen after setup', () => {
+  it('says just "Welcome" when no name was given, and Enter continues to Home', async () => {
+    const user = userEvent.setup();
+    renderAt('/setup');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
+    expect((await screen.findByTestId('welcome-name')).textContent).toBe('Welcome');
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('heading', { name: /^good (morning|afternoon|evening)$/i })).toBeTruthy();
+  });
+
+  it('is only for people who finished setup', async () => {
+    renderAt('/ready');
+    expect(await screen.findByRole('heading', { name: /know before you go/i })).toBeTruthy();
   });
 });

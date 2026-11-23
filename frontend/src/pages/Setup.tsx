@@ -21,7 +21,7 @@ export function Setup() {
 
   function finish() {
     store.update({ name: name.trim(), home, work, ...prefs, onboarded: true });
-    navigate('/', { replace: true });
+    navigate('/ready', { replace: true });
   }
   function skip() {
     store.update({ onboarded: true }); // keep the defaults, nothing else is saved
@@ -36,7 +36,7 @@ export function Setup() {
 
         {step === 0 && (
           <div className="rr-field">
-            <label htmlFor="setup-name">What should we call you? (optional)</label>
+            <label htmlFor="setup-name">What’s your name? (optional)</label>
             <input
               id="setup-name"
               type="text"
