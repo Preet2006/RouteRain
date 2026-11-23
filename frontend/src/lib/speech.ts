@@ -9,6 +9,8 @@
 
 export type SpeechLanguage = 'en' | 'hi';
 
+export type SpeakResult = 'ended' | 'blocked' | 'interrupted' | 'failed' | 'unsupported';
+
 type SynthLike = Pick<SpeechSynthesis, 'getVoices' | 'speak' | 'cancel' | 'speaking'> & {
   addEventListener?: (type: 'voiceschanged', listener: () => void) => void;
   removeEventListener?: (type: 'voiceschanged', listener: () => void) => void;
@@ -84,25 +86,34 @@ export function createSpeech(
     async hasHindi() {
       return hasVoiceFor(await loadVoices(), 'hi');
     },
-    /** Speaks text; resolves true when speech finished, false when unsupported, stopped or failed. */
-    async speak(text: string, language: SpeechLanguage = 'en'): Promise<boolean> {
+    /**
+     * Speaks text and says how it ended: 'ended' (finished), 'blocked' (the browser refuses speech before the
+     * user has interacted with the page), 'interrupted' (stop() or another line cancelled it), 'failed', or
+     * 'unsupported' (no speech engine, or nothing to say).
+     */
+    async speakResult(text: string, language: SpeechLanguage = 'en'): Promise<SpeakResult> {
       const s = synth();
-      if (!s || !text.trim()) return false;
+      if (!s || !text.trim()) return 'unsupported';
       const list = await loadVoices();
       s.cancel(); // never overlap two lines
       const utterance = makeUtterance(text);
       const voice = pickVoice(list, language) ?? pickEnglishFallback(list);
       if (voice) utterance.voice = voice as SpeechSynthesisVoice;
       utterance.lang = voice ? voice.lang : LANG_TAG[language];
-      return new Promise<boolean>((resolve) => {
-        utterance.onend = () => resolve(true);
-        utterance.onerror = () => resolve(false);
+      return new Promise<SpeakResult>((resolve) => {
+        utterance.onend = () => resolve('ended');
+        utterance.onerror = (e: SpeechSynthesisErrorEvent) =>
+          resolve(e?.error === 'not-allowed' ? 'blocked' : e?.error === 'interrupted' || e?.error === 'canceled' ? 'interrupted' : 'failed');
         try {
           s.speak(utterance);
         } catch {
-          resolve(false);
+          resolve('failed');
         }
       });
+    },
+    /** Speaks text; resolves true only when it finished. */
+    async speak(text: string, language: SpeechLanguage = 'en'): Promise<boolean> {
+      return (await this.speakResult(text, language)) === 'ended';
     },
     stop() {
       try {

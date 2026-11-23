@@ -29,7 +29,7 @@ export function quickPlaces(profile: ReturnType<typeof useProfile>['profile']): 
 }
 
 export function Plan() {
-  const { profile, store } = useProfile();
+  const { profile } = useProfile();
   const { scenario } = useScenario();
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,7 +67,6 @@ export function Plan() {
         mode: scenario.mode,
         date: scenario.date,
       });
-      store.addRecentTrip(from, to);
       navigate(`/route/${route.route_id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong while planning the route.');

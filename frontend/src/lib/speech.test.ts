@@ -95,3 +95,25 @@ describe('speech wrapper', () => {
     expect(await createSpeech(() => synth as never, utterance).speak('hello')).toBe(false);
   });
 });
+
+describe('speakResult tells a blocked autoplay from a user stop', () => {
+  const run = async (errorCode: string | null) => {
+    const { synth } = fakeSynth(VOICES);
+    synth.speak.mockImplementation((u: { onend?: () => void; onerror?: (e: { error: string }) => void }) =>
+      queueMicrotask(() => (errorCode ? u.onerror?.({ error: errorCode }) : u.onend?.())),
+    );
+    return createSpeech(() => synth as never, utterance).speakResult('hello', 'en');
+  };
+  it('ended', async () => expect(await run(null)).toBe('ended'));
+  it('blocked when the browser refuses speech before any interaction', async () => expect(await run('not-allowed')).toBe('blocked'));
+  it('interrupted when cancelled', async () => {
+    expect(await run('interrupted')).toBe('interrupted');
+    expect(await run('canceled')).toBe('interrupted');
+  });
+  it('failed for anything else', async () => expect(await run('synthesis-failed')).toBe('failed'));
+  it('unsupported with no engine or no text', async () => {
+    expect(await createSpeech(() => null, utterance).speakResult('hello')).toBe('unsupported');
+    const { synth } = fakeSynth(VOICES);
+    expect(await createSpeech(() => synth as never, utterance).speakResult('  ')).toBe('unsupported');
+  });
+});

@@ -200,7 +200,7 @@ describe('finding routes', () => {
     expect(button.disabled).toBe(false);
   });
 
-  it('plans for the live forecast with the saved caution, saves the trip and opens the result', async () => {
+  it('plans for the live forecast with the saved caution and opens the result', async () => {
     profileStore.update({ caution: 'balanced' });
     const user = userEvent.setup();
     renderPlan();
@@ -213,7 +213,6 @@ describe('finding routes', () => {
       destination: { lat: 28.4395, lon: 77.0422, label: 'Medanta The Medicity' },
       caution: 'balanced', mode: 'live', date: null,
     });
-    expect(profileStore.get().recentTrips[0]).toMatchObject({ origin: { label: 'Cyber Hub' }, destination: { label: 'Medanta The Medicity' } });
   });
 
   it('plans for the replay day on screen and says so', async () => {
