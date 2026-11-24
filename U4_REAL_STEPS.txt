@@ -1,0 +1,87 @@
+
+==================== Cyber Hub -> Medanta The Medicity on 2026-08-07 (detour around a RED hotspot) ====================
+avoided: ['Rajiv Chowk']; identical routes: False; usual 8.9 km / 7.8 min; detour 8.84 km / 8.8 min
+
+--- Cyber Hub -> Medanta The Medicity: flood_aware route, 8.8 km, 8.8 min, 7 steps ---
+  0. Head northeast                                                    238 m   [depart]
+  1. Turn left                                                         659 m   [turn/left]
+  2. Bear left onto Delhi-Gurugram Expressway                         6.2 km   [slight/left]
+  3. Bear left onto Shaheed Major Vikas Yadav Marg                     614 m   [slight/left]
+  4. Turn right                                                        947 m   [turn/right]
+  5. Turn left onto Chowdhury Baktawar Singh Road                      146 m   [turn/left]
+  6. You have arrived at your destination                                0 m   [arrive]
+     hotspot IFFCO Chowk (YELLOW): within 1 km from 2.7 km, closest 674 m at 3.3 km, on the left -> passes near
+     hotspot Rajiv Chowk (RED): never within 1 km, closest 1.0 km at 7.1 km, on the right -> avoided
+
+--- Cyber Hub -> Medanta The Medicity: normal route, 8.9 km, 7.8 min, 5 steps ---
+  0. Head northeast                                                    238 m   [depart]
+  1. Turn left                                                         659 m   [turn/left]
+  2. Bear left onto Delhi-Gurugram Expressway                         7.1 km   [slight/left]
+  3. Turn left onto Chowdhury Baktawar Singh Road                      868 m   [turn/left]
+  4. You have arrived at your destination                                0 m   [arrive]
+     hotspot IFFCO Chowk (YELLOW): within 1 km from 2.7 km, closest 674 m at 3.3 km, on the left -> passes near
+     hotspot Rajiv Chowk (RED): within 1 km from 7.1 km, closest 431 m at 8.0 km, on the right -> DRIVES THROUGH
+
+==================== MG Road Metro -> Badshahpur on 2026-07-08 (YELLOW day) ====================
+avoided: ['Sohna Road']; identical routes: False; usual 12.86 km / 14.6 min; detour 13.25 km / 16.9 min
+
+--- MG Road Metro -> Badshahpur: flood_aware route, 13.3 km, 16.9 min, 17 steps ---
+  0. Head east                                                         106 m   [depart]
+  1. Turn right, then turn left onto Mehrauli Gurgaon Road             357 m   [turn/right]
+  2. Turn right, then turn right onto Mehrauli Gurgaon Road           1.7 km   [turn/right]
+  3. Bear left                                                        1.0 km   [slight/left]
+  4. Turn right, then turn left onto Delhi-Gurugram Expressway        4.3 km   [turn/right]
+  5. Continue onto Sohna Road, then continue onto Shubhash Chowk Underpass   2.0 km   [continue/straight]
+  6. Turn left, then turn right                                        902 m   [turn/left]
+  7. Turn left                                                         170 m   [turn/left]
+  8. Turn left                                                         748 m   [turn/left]
+  9. Turn left                                                         506 m   [turn/left]
+ 10. Turn left onto Captain Chandan Lal Marg                           406 m   [turn/left]
+ 11. Turn right                                                        187 m   [turn/right]
+ 12. At the roundabout, take the first exit                            342 m   [roundabout/straight exit 1]
+ 13. Turn right                                                        194 m   [turn/right]
+ 14. Turn left                                                         302 m   [turn/left]
+ 15. Turn left                                                          44 m   [turn/left]
+ 16. You have arrived at your destination                                0 m   [arrive]
+     hotspot Rajiv Chowk (YELLOW): within 1 km from 6.0 km, closest 269 m at 7.1 km, on the right -> DRIVES THROUGH
+     hotspot Sohna Road (YELLOW): within 1 km from 10.0 km, closest 319 m at 12.2 km, on the right -> avoided
+
+--- MG Road Metro -> Badshahpur: normal route, 12.9 km, 14.6 min, 17 steps ---
+  0. Head east                                                         106 m   [depart]
+  1. Turn right, then turn left onto Mehrauli Gurgaon Road             357 m   [turn/right]
+  2. Turn right, then turn right onto Mehrauli Gurgaon Road           1.7 km   [turn/right]
+  3. Bear left                                                        1.0 km   [slight/left]
+  4. Turn right, then turn left onto Delhi-Gurugram Expressway        3.8 km   [turn/right]
+  5. Turn left                                                         483 m   [turn/left]
+  6. Continue onto Sohna Road, then continue onto Shubhash Chowk Underpass   2.0 km   [continue/straight]
+  7. Turn left, then turn right                                       1.8 km   [turn/left]
+  8. Turn right                                                         35 m   [turn/right]
+  9. Turn right                                                        255 m   [turn/right]
+ 10. Turn left onto Captain Chandan Lal Marg                           305 m   [turn/left]
+ 11. Turn left                                                         187 m   [turn/left]
+ 12. At the roundabout, take the first exit                            342 m   [roundabout/straight exit 1]
+ 13. Turn right                                                        194 m   [turn/right]
+ 14. Turn left                                                         302 m   [turn/left]
+ 15. Turn left                                                          44 m   [turn/left]
+ 16. You have arrived at your destination                                0 m   [arrive]
+     hotspot Rajiv Chowk (YELLOW): within 1 km from 6.0 km, closest 292 m at 7.1 km, on the right -> DRIVES THROUGH
+     hotspot Sohna Road (YELLOW): within 1 km from 10.0 km, closest 12 m at 11.5 km, on the route -> DRIVES THROUGH
+     PROBLEM: step 8: only 35.1 m long
+
+==================== Sector 29 -> Huda City Centre on 2026-08-07 (another trip on the RED day) ====================
+avoided: none; identical routes: True; usual 3.73 km / 5.3 min; detour 3.73 km / 5.3 min
+
+--- Sector 29 -> Huda City Centre: flood_aware route, 3.7 km, 5.2 min, 9 steps ---
+  0. Head west                                                         123 m   [depart]
+  1. Turn left                                                         786 m   [turn/left]
+  2. Turn right                                                        198 m   [turn/right]
+  3. Bear left onto Sector Road                                        456 m   [slight/left]
+  4. Continue onto Flyover                                             282 m   [continue/straight]
+  5. Continue onto Netaji Subhash Chandra Bose Road, then turn right onto August Kranti Marg    893 m   [continue/straight]
+  6. Turn right, then turn right onto August Kranti Marg               882 m   [turn/right]
+  7. Turn left                                                         111 m   [turn/left]
+  8. You have arrived at your destination                                0 m   [arrive]
+     hotspot IFFCO Chowk (YELLOW): within 1 km from 0 m, closest 989 m at 0 m, on the right -> passes near
+
+Share of manoeuvre steps (excluding depart/arrive) that name a street: 19/45 = 42%
+Manoeuvres: {'turn': 33, 'slight': 6, 'continue': 4, 'roundabout': 2}

@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from config import FLOOD_DELAY_MIN, MOBILE_REPLAY_DATES, ROUTE_CACHE_TTL_MIN
 from src import narrate as narration
-from src import route_planner
+from src import directions, route_planner
 from src.advice import build_advice, replay_date_label
 from src.places import geocode_place, load_places, search_places
 from src.predict import MODEL_PATH
@@ -251,16 +251,24 @@ class RouteRequest(BaseModel):
 
 
 _routes: dict[str, tuple[float, dict]] = {}
+# Navigation side of the route cache (same lifetime): the node path of each route, the ids of avoided hotspots and
+# the risk zones, so /directions can rebuild the full edge geometry and the steps from the road graph. Kept apart
+# from the payload so the public /route response is unchanged.
+_nav: dict[str, dict] = {}
 _routes_lock = threading.Lock()
 
 
-def _store(payload):
+def _store(payload, nav=None):
     route_id = uuid.uuid4().hex[:12]
     now = time.monotonic()
     with _routes_lock:
         for key in [k for k, (exp, _) in _routes.items() if exp <= now]:
             del _routes[key]
+        for key in [k for k in _nav if k not in _routes]:
+            del _nav[key]
         _routes[route_id] = (now + ROUTE_CACHE_TTL_MIN * 60, payload)
+        if nav is not None:
+            _nav[route_id] = nav
     return route_id
 
 
@@ -358,13 +366,49 @@ def create_route(body: RouteRequest):
                         "radius_m": red_yellow_buffers[i["tier"]]} for i in items if i["tier"] in red_yellow_buffers],
         "template_advice": advice,
     }
-    payload["route_id"] = _store(payload)
+    nav = {"paths": {"normal": list(normal["path"]), "flood_aware": list(aware["path"])},
+           "avoided_ids": [h["hotspot_id"] for h in plan["avoided_hotspots"]],
+           "zones": [{"hotspot_id": z["id"], "name": z["name"], "lat": z["lat"], "lon": z["lon"], "tier": z["tier"],
+                      "buffer_m": z["radius_m"]} for z in payload["risk_zones"]],
+           "built": {}}
+    payload["route_id"] = _store(payload, nav)
     return payload
 
 
 @router.get("/route/{route_id}")
 def get_route(route_id: str):
     return _fetch(route_id)
+
+
+@router.get("/route/{route_id}/directions")
+def route_directions(route_id: str, which: Literal["flood_aware", "normal"] = "flood_aware"):
+    """Turn-by-turn steps, the full navigation line (with distance at every point) and the avoided-hotspot events
+    for one of the two cached routes. Built from the same road-graph path the route used."""
+    _fetch(route_id)  # 404 with the expiry message when the route is gone
+    with _routes_lock:
+        nav = _nav.get(route_id)
+    if nav is None:
+        raise HTTPException(404, EXPIRED_MESSAGE)
+    if which in nav["built"]:
+        return nav["built"][which]
+    try:
+        graph = route_planner.load_road_graph()
+        path = nav["paths"][which]
+        steps = directions.build_steps(graph, path)
+        geometry = directions.build_nav_geometry(graph, path, steps)
+        events = directions.build_hotspot_events(geometry, nav["zones"], avoided_ids=nav["avoided_ids"])
+        _, time_s = route_planner.route_metrics(graph, path)
+    except FileNotFoundError as exc:
+        raise HTTPException(503, "The road network is not loaded on the server.") from exc
+    except Exception as exc:
+        raise HTTPException(502, "Directions could not be built for this route.") from exc
+    result = {"route_id": route_id, "which": which, "language": "en",
+              "total_distance_m": geometry["total_m"], "total_duration_s": round(time_s, 1),
+              "steps": [s.to_dict() for s in steps],
+              "geometry": {k: geometry[k] for k in ("coordinates", "cumulative_m", "step_point_index")},
+              "hotspot_events": events}
+    nav["built"][which] = result
+    return result
 
 
 # ---- /narrate --------------------------------------------------------------------------------

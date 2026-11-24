@@ -285,6 +285,81 @@ def test_route_input_validation(world):
     assert client.post("/api/v2/route", json={**body(), "date": "2020-01-01"}).status_code == 404
 
 
+# ---- /route/{id}/directions -----------------------------------------------------------------------------
+
+def test_directions_for_both_routes_follow_the_cached_paths(world):
+    j = client.post("/api/v2/route", json=body()).json()
+    assert "paths" not in j and "nav" not in j and "steps" not in j  # the public route payload is unchanged
+    for which, leg in (("flood_aware", "flood_aware_route"), ("normal", "normal_route")):
+        r = client.get(f"/api/v2/route/{j['route_id']}/directions", params={"which": which})
+        assert r.status_code == 200, r.text
+        dj = r.json()
+        assert dj["which"] == which and dj["route_id"] == j["route_id"] and dj["language"] == "en"
+        steps = dj["steps"]
+        assert steps[0]["maneuver"] == "depart" and steps[-1]["maneuver"] == "arrive"
+        assert sum(s["distance_m"] for s in steps) == pytest.approx(dj["total_distance_m"], abs=1.0)
+        assert dj["total_distance_m"] == pytest.approx(j[leg]["distance_km"] * 1000, abs=6)  # the route's own length (km, 2 dp)
+        assert dj["total_duration_s"] == pytest.approx(j[leg]["drive_time_min"] * 60, abs=4)
+        g = dj["geometry"]
+        assert len(g["coordinates"]) == len(g["cumulative_m"]) and len(g["step_point_index"]) == len(steps)
+        assert g["cumulative_m"][-1] == pytest.approx(dj["total_distance_m"], abs=0.1)
+        # the full line is at least as detailed as the simplified polyline used for drawing
+        assert len(g["coordinates"]) >= len(j[leg]["polyline"])
+        assert g["coordinates"][0] == pytest.approx(j[leg]["polyline"][0], abs=1e-5)
+        assert g["coordinates"][-1] == pytest.approx(j[leg]["polyline"][-1], abs=1e-5)
+
+
+def test_detour_has_turns_and_the_normal_route_does_not(world):
+    # (3,1) -> (3,6): the detour goes round through real junctions (the grid's corner nodes are only bends)
+    j = client.post("/api/v2/route", json=body(origin=(3, 1), dest=(3, 6))).json()
+    aware = client.get(f"/api/v2/route/{j['route_id']}/directions").json()  # flood_aware is the default
+    normal = client.get(f"/api/v2/route/{j['route_id']}/directions", params={"which": "normal"}).json()
+    assert [s["maneuver"] for s in normal["steps"]] == ["depart", "arrive"]
+    turns = [s for s in aware["steps"] if s["maneuver"] == "turn"]
+    assert len(turns) >= 2 and all(s["modifier"] in ("left", "right") and s["street"] is None for s in turns)
+    assert all(s["instruction_en"] == f"Turn {s['modifier']}" for s in turns)
+
+
+def test_directions_report_the_hotspot_the_detour_avoids_and_the_one_the_usual_route_drives_through(world):
+    j = client.post("/api/v2/route", json=body()).json()
+    aware = client.get(f"/api/v2/route/{j['route_id']}/directions").json()["hotspot_events"]
+    normal = client.get(f"/api/v2/route/{j['route_id']}/directions", params={"which": "normal"}).json()["hotspot_events"]
+    a = next((e for e in aware if e["hotspot_id"] == "H03"), None)
+    if a is not None:  # within 1 km of the detour
+        assert a["avoided"] is True and a["passes_through"] is False and a["side"] in ("left", "right")
+        assert a["closest_distance_m"] > 500 and 0 <= a["approach_distance_m"] <= a["exit_distance_m"]
+    n = next(e for e in normal if e["hotspot_id"] == "H03")
+    assert n["passes_through"] is True and n["avoided"] is False and n["side"] == "on_route"
+    assert n["tier"] == "RED" and n["buffer_m"] == 500
+
+
+def test_directions_404_for_unknown_or_expired_routes(world):
+    r = client.get("/api/v2/route/nosuchroute/directions")
+    assert r.status_code == 404 and r.json()["detail"] == web.EXPIRED_MESSAGE
+    j = client.post("/api/v2/route", json=body()).json()
+    web._routes[j["route_id"]] = (0.0, web._routes[j["route_id"]][1])  # expired
+    r = client.get(f"/api/v2/route/{j['route_id']}/directions")
+    assert r.status_code == 404 and "expired" in r.json()["detail"]
+
+
+def test_directions_rejects_a_bad_which_and_expired_routes_free_their_navigation_data(world):
+    j = client.post("/api/v2/route", json=body()).json()
+    assert client.get(f"/api/v2/route/{j['route_id']}/directions", params={"which": "other"}).status_code == 422
+    web._routes[j["route_id"]] = (0.0, web._routes[j["route_id"]][1])
+    client.post("/api/v2/route", json=body())  # storing a new route prunes the expired one, and its nav data
+    assert j["route_id"] not in web._nav
+
+
+def test_directions_are_built_once_per_route_and_leg(world, monkeypatch):
+    j = client.post("/api/v2/route", json=body()).json()
+    calls = []
+    real = web.directions.build_steps
+    monkeypatch.setattr(web.directions, "build_steps", lambda *a, **k: calls.append(1) or real(*a, **k))
+    for _ in range(3):
+        assert client.get(f"/api/v2/route/{j['route_id']}/directions").status_code == 200
+    assert calls == [1]
+
+
 # ---- /narrate ----------------------------------------------------------------------------------------
 
 def test_narrate_returns_template_advice(world, monkeypatch):
