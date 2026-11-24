@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 
 import {
+  DirectionsSchema,
   ErrorBodySchema,
   GeocodeSchema,
   HealthSchema,
@@ -108,3 +109,7 @@ export const createRoute = (body: {
 export const getRoute = (routeId: string) => request(`/route/${encodeURIComponent(routeId)}`, RouteResponseSchema);
 export const narrate = (body: { route_id: string; user_name?: string | null; language: 'en' | 'hi' }) =>
   request('/narrate', NarrateResponseSchema, { method: 'POST', body, timeoutMs: 15_000 });
+
+export type RouteLeg = 'flood_aware' | 'normal';
+export const getDirections = (routeId: string, which: RouteLeg = 'flood_aware') =>
+  request(`/route/${encodeURIComponent(routeId)}/directions?which=${which}`, DirectionsSchema, { timeoutMs: 30_000 });

@@ -141,3 +141,53 @@ export type NarrateResponse = z.infer<typeof NarrateResponseSchema>;
 
 /** FastAPI error body, e.g. {"detail": "No drivable route found between these points."} */
 export const ErrorBodySchema = z.object({ detail: z.union([z.string(), z.array(z.unknown())]) });
+
+/** GET /route/{id}/directions (phase U4): turn-by-turn steps, the full navigation line and hotspot events. */
+export const NavStepSchema = z.object({
+  index: z.number(),
+  maneuver: z.enum(['depart', 'continue', 'turn', 'slight', 'sharp', 'uturn', 'roundabout', 'arrive']),
+  modifier: z.enum(['left', 'right', 'straight']).nullable(),
+  street: z.string().nullable(),
+  distance_m: z.number(),
+  duration_s: z.number(),
+  location: z.tuple([z.number(), z.number()]),
+  bearing_before: z.number().nullable(),
+  bearing_after: z.number().nullable(),
+  exit_number: z.number().nullable(),
+  instruction_en: z.string(),
+  path_index: z.number(),
+  start_m: z.number(),
+});
+export type NavStep = z.infer<typeof NavStepSchema>;
+
+export const HotspotEventSchema = z.object({
+  hotspot_id: z.string(),
+  name: z.string(),
+  tier: TierSchema,
+  buffer_m: z.number().nullable(),
+  approach_distance_m: z.number(),
+  closest_distance_along_m: z.number(),
+  closest_distance_m: z.number(),
+  exit_distance_m: z.number(),
+  side: z.enum(['left', 'right', 'on_route']),
+  within_radius: z.boolean(),
+  passes_through: z.boolean(),
+  avoided: z.boolean(),
+});
+export type HotspotEvent = z.infer<typeof HotspotEventSchema>;
+
+export const DirectionsSchema = z.object({
+  route_id: z.string(),
+  which: z.enum(['flood_aware', 'normal']),
+  language: z.string(),
+  total_distance_m: z.number(),
+  total_duration_s: z.number(),
+  steps: z.array(NavStepSchema).min(1),
+  geometry: z.object({
+    coordinates: z.array(z.tuple([z.number(), z.number()])).min(1),
+    cumulative_m: z.array(z.number()).min(1),
+    step_point_index: z.array(z.number()),
+  }),
+  hotspot_events: z.array(HotspotEventSchema),
+});
+export type Directions = z.infer<typeof DirectionsSchema>;

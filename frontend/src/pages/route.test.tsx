@@ -301,3 +301,31 @@ describe('route result: errors', () => {
     expect(await screen.findByRole('heading', { name: /finding your route/i })).toBeTruthy();
   });
 });
+
+describe('route result: starting the trip', () => {
+  it('has a large primary "Start trip with RouteRain" button and a smaller "Preview the usual route" link', async () => {
+    renderRoute();
+    const start = await screen.findByRole('link', { name: 'Start trip with RouteRain' });
+    expect(start.getAttribute('href')).toBe('/navigate/abc123abc123');
+    expect(start.className).toMatch(/primary/);
+    expect(start.className).toMatch(/rr-start-btn/);
+    const preview = screen.getByRole('link', { name: 'Preview the usual route' });
+    expect(preview.getAttribute('href')).toBe('/navigate/abc123abc123?which=normal');
+    expect(preview.className).not.toMatch(/primary/);
+  });
+
+  it('sits under the advice, inside the Advice card', async () => {
+    renderRoute();
+    const start = await screen.findByRole('link', { name: 'Start trip with RouteRain' });
+    const card = start.closest('section')!;
+    expect(within(card).getByRole('heading', { name: 'Advice' })).toBeTruthy();
+    expect(within(card).getByTestId('advice-text')).toBeTruthy();
+  });
+
+  it('when both routes are the same there is nothing to preview, so only Start is offered', async () => {
+    api.getRoute.mockResolvedValue({ ...BASE, identical_routes: true, avoided_hotspots: [] });
+    renderRoute();
+    expect(await screen.findByRole('link', { name: 'Start trip with RouteRain' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Preview the usual route' })).toBeNull();
+  });
+});

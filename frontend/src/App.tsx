@@ -5,6 +5,7 @@ import { Entry } from '@/pages/Entry';
 import { HotspotDetail } from '@/pages/HotspotDetail';
 import { Hotspots } from '@/pages/Hotspots';
 import { About } from '@/pages/About';
+import { NavigationScreen } from '@/pages/Navigate';
 import { NotFound } from '@/pages/Placeholders';
 import { Plan } from '@/pages/Plan';
 import { Ready } from '@/pages/Ready';
@@ -17,6 +18,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<Entry />} />
       <Route path="/welcome" element={<Navigate to="/setup" replace />} />
+      <Route path="/navigate/:routeId" element={<NavigationScreen />} />
       <Route element={<BareLayout />}>
         <Route path="/setup" element={<Setup />} />
         <Route path="/ready" element={<Ready />} />

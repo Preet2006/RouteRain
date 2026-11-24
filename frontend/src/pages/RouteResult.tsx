@@ -94,6 +94,12 @@ export function RouteResult() {
           )}
           {advice.voice === 'failed' && <p className="rr-field-error" role="alert">The voice could not play. Check the volume and that the tab is not muted.</p>}
           {advice.voice === 'unsupported' && <p className="rr-note" role="note">This browser can&apos;t speak. Use Chrome or Edge for voice advice; the text above is the same advice.</p>}
+          <div className="rr-start">
+            <Link to={`/navigate/${route.route_id}`} className="rr-btn primary rr-start-btn">Start trip with RouteRain</Link>
+            {!route.identical_routes && (
+              <Link to={`/navigate/${route.route_id}?which=normal`} className="rr-link rr-start-preview">Preview the usual route</Link>
+            )}
+          </div>
         </section>
 
         <section className="rr-card" aria-labelledby="cmp-h">
@@ -142,7 +148,7 @@ export function RouteResult() {
         )}
 
         <div className="rr-actions">
-          <Link to="/plan" className="rr-btn primary">Plan another trip</Link>
+          <Link to="/plan" className="rr-btn">Plan another trip</Link>
           <Link to="/" className="rr-btn">Back to the map</Link>
         </div>
       </div>

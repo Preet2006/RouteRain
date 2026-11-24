@@ -75,10 +75,12 @@ async def security_headers(request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; img-src 'self' data: https://*.tile.openstreetmap.org; "
+        # tiles.openfreemap.org serves the navigation map's style, vector tiles, sprites and glyphs (MapLibre,
+        # phase U5); MapLibre runs its tile worker from a blob: URL.
+        "default-src 'self'; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://tiles.openfreemap.org; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; script-src 'self'; "
-        "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+        "font-src 'self' https://fonts.gstatic.com; script-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; "
+        "connect-src 'self' https://tiles.openfreemap.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     )
     return response
 

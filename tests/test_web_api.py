@@ -498,3 +498,16 @@ def test_live_dashboard_uses_hotspot_names_not_row_numbers(monkeypatch):
     assert {h["name"] for h in r["hotspots"]} >= {"Rajiv Chowk", "Hero Honda Chowk"}
     assert all(h["explanation"].startswith(h["name"]) for h in r["hotspots"])
     monkeypatch.setitem(api._forecast_cache, "rows", None)  # leave no fake data cached for other tests
+
+
+# ---- content security policy (phase U5: MapLibre + OpenFreeMap) ---------------------------------------------------
+
+def test_csp_allows_only_the_named_map_hosts_and_blob_workers():
+    csp = client.get("/api/v2/health").headers["content-security-policy"]
+    directives = {d.split()[0]: d.split()[1:] for d in csp.split("; ") if d}
+    assert directives["connect-src"] == ["'self'", "https://tiles.openfreemap.org"]
+    assert "https://tiles.openfreemap.org" in directives["img-src"] and "blob:" in directives["img-src"]
+    assert directives["worker-src"] == ["'self'", "blob:"]
+    assert directives["script-src"] == ["'self'"]  # still no inline or remote scripts
+    assert directives["default-src"] == ["'self'"] and directives["object-src"] == ["'none'"]
+    assert not any("*" == tok or tok.startswith("http:") for toks in directives.values() for tok in toks)
