@@ -13,6 +13,10 @@ export const NARRATION_WAIT_MS = 7000;
 /** Only the first word of the name ever leaves the browser. */
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? '';
 
+/** Routes whose advice has already been read aloud in this tab: it is never read automatically a second time. */
+const autoPlayed = new Set<string>();
+export const resetAdviceMemory = () => autoPlayed.clear();
+
 export type VoiceState = 'preparing' | 'speaking' | 'idle' | 'blocked' | 'failed' | 'unsupported';
 
 /** True when the browser says the user has not interacted with the page yet (speech would be blocked). */
@@ -76,6 +80,13 @@ export function useAdvice(route: RouteResponse | undefined, profile: Pick<Profil
   // Auto-play once per route.
   useEffect(() => {
     if (!route || !live || autoFor.current === route.route_id) return;
+    if (autoPlayed.has(route.route_id)) {
+      // spoken before (e.g. coming back from the trip screen): show the text, wait for the Play button
+      autoFor.current = route.route_id;
+      setFrozen(live);
+      setVoice('idle');
+      return;
+    }
     if (!(settled || waited)) return;
     autoFor.current = route.route_id;
     setFrozen(live);
@@ -91,6 +102,7 @@ export function useAdvice(route: RouteResponse | undefined, profile: Pick<Profil
       setVoice('blocked');
       return;
     }
+    autoPlayed.add(route.route_id);
     void speakNow(live.text, live.language);
   }, [route, live, settled, waited, profile.voiceOn, speakNow]);
 

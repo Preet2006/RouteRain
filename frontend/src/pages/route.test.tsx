@@ -35,6 +35,7 @@ vi.mock('@/lib/speech', () => ({
 vi.mock('@/features/route/RouteMap', () => ({ RouteMap: (p: { route: RouteResponse }) => <div data-testid="map" data-id={p.route.route_id} /> }));
 
 import { ApiError } from '@/api/client';
+import { resetAdviceMemory } from '@/features/route/useAdvice';
 import { profileStore } from '@/lib/storage';
 import { RouteResult } from '@/pages/RouteResult';
 
@@ -78,6 +79,7 @@ const llmReply = (text = LLM) => ({ text, source: 'llm', language: 'en', scenari
 const standardReply = (text = TEMPLATE) => ({ text, source: 'template', language: 'en', scenario: BASE.scenario });
 
 beforeEach(() => {
+  resetAdviceMemory();
   window.localStorage.clear();
   profileStore.reload();
   profileStore.update({ onboarded: true, name: 'Tanish Sharma', voiceOn: true, language: 'en' });
@@ -259,6 +261,7 @@ describe('route result: voice', () => {
     renderRoute();
     expect((await screen.findByRole('alert')).textContent).toMatch(/could not play/i);
     cleanup();
+    resetAdviceMemory();
     speechMock.speakResult.mockResolvedValueOnce('unsupported');
     renderRoute();
     expect((await screen.findByRole('note')).textContent).toMatch(/can.t speak/i);
@@ -271,6 +274,7 @@ describe('route result: voice', () => {
     await waitFor(() => expect(api.narrate).toHaveBeenCalled());
     expect(api.narrate.mock.calls[0][0].language).toBe('en');
     cleanup();
+    resetAdviceMemory();
     vi.clearAllMocks();
     api.getRoute.mockResolvedValue(BASE);
     api.narrate.mockResolvedValue({ ...llmReply('७ अगस्त २०२६ को…'), language: 'hi' });
@@ -327,5 +331,20 @@ describe('route result: starting the trip', () => {
     renderRoute();
     expect(await screen.findByRole('link', { name: 'Start trip with RouteRain' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Preview the usual route' })).toBeNull();
+  });
+});
+
+describe('route result: the advice is read aloud only once', () => {
+  it('coming back to the same route does not read it again automatically, but Play still works', async () => {
+    const first = renderRoute();
+    await screen.findByTestId('advice-text');
+    await waitFor(() => expect(speechMock.speakResult).toHaveBeenCalledTimes(1));
+    first.unmount();
+    renderRoute(); // e.g. back from the trip screen
+    await screen.findByTestId('advice-text');
+    await new Promise((r) => setTimeout(r, 150));
+    expect(speechMock.speakResult).toHaveBeenCalledTimes(1);
+    fireEvent.click(await screen.findByRole('button', { name: /play/i }));
+    await waitFor(() => expect(speechMock.speakResult).toHaveBeenCalledTimes(2));
   });
 });

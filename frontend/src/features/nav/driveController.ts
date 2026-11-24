@@ -26,6 +26,8 @@ export type Hud = Guidance & {
   finished: boolean;
   /** The car is waiting at the start while the opening line is spoken. */
   starting: boolean;
+  /** Nothing has been started yet: the screen is the plain, standing view. */
+  idle: boolean;
 };
 
 export type DriveDeps = {
@@ -46,6 +48,8 @@ export type DriveDeps = {
   hudEveryMs?: number;
   multiplier?: number;
   muted?: boolean;
+  /** Start driving at once. Default false: the car stands at the start until begin() is called ("Show live run"). */
+  autoStart?: boolean;
   /** Keep the car at the start until the opening line has been spoken (default true). */
   holdForStartLine?: boolean;
   /** ...but never longer than this, ms (default 20 s). */
@@ -70,6 +74,7 @@ export class DriveController {
   private arrived = false;
   private stopped = false;
   private holding: boolean;
+  private idle: boolean;
   private holdSince: number | null = null;
   private readonly geometry: NavGeometry;
 
@@ -81,6 +86,7 @@ export class DriveController {
     this.planner = new PromptPlanner(prompts);
     this.muted = deps.muted ?? false;
     this.holding = deps.holdForStartLine ?? true;
+    this.idle = !(deps.autoStart ?? false);
     this.geometry = d.geometry;
     this.raf = deps.raf ?? ((cb) => requestAnimationFrame(cb));
     this.caf = deps.caf ?? ((id) => cancelAnimationFrame(id));
@@ -122,6 +128,18 @@ export class DriveController {
     }
   }
 
+  /** "Show live run": the opening line is spoken and the simulated drive begins. */
+  begin() {
+    if (!this.idle) return;
+    this.idle = false;
+    this.holdSince = null;
+    this.emitHud(performance.now(), true);
+  }
+
+  get isIdle() {
+    return this.idle;
+  }
+
   private release() {
     if (!this.holding) return;
     this.holding = false;
@@ -137,12 +155,12 @@ export class DriveController {
 
   /** One frame. Exposed so tests can drive it with their own clock. */
   step(now: number) {
-    if (this.holding) {
+    if (this.holding && !this.idle) {
       this.holdSince ??= now;
       if (this.muted || now - this.holdSince > (this.deps.holdMaxMs ?? 20_000)) this.release();
     }
     const wasPaused = this.sim.paused;
-    if (this.holding) this.sim.paused = true; // time stands still while the opening line is spoken
+    if (this.holding || this.idle) this.sim.paused = true; // time stands still before the run and while the opening line is spoken
     const d = this.sim.tick(now);
     this.sim.paused = wasPaused;
     const pos = positionAt(this.geometry, d);
@@ -155,7 +173,7 @@ export class DriveController {
       zoomIn: guidance.next.maneuver !== 'arrive' && guidance.distanceToNextM <= ZOOM_IN_BEFORE_TURN_M,
     });
 
-    const prompt = this.planner.due(d, this.sim.multiplier);
+    const prompt = this.idle ? null : this.planner.due(d, this.sim.multiplier);
     if (prompt && !this.muted) {
       this.deps.onSpoken?.(prompt);
       void this.deps.speak(prompt.text, this.deps.language).then((r) => {
@@ -183,7 +201,8 @@ export class DriveController {
       paused: this.sim.paused,
       multiplier: this.sim.multiplier,
       finished: this.sim.finished,
-      starting: this.holding,
+      starting: this.holding && !this.idle,
+      idle: this.idle,
     });
   }
 }

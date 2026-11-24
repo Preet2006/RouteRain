@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { ApiError, getDirections, getRoute, narrate, type RouteLeg } from '@/api/client';
+import { ApiError, getDirections, getRoute, type RouteLeg } from '@/api/client';
 import type { Directions, RouteResponse } from '@/api/schemas';
 import { useRrBody } from '@/components/Shell';
 import { DriveController, type Hud } from '@/features/nav/driveController';
@@ -11,9 +11,7 @@ import { arrivalClock, formatDistance, formatKm, formatMinutes } from '@/feature
 import { ManeuverIcon } from '@/features/nav/ManeuverIcon';
 import type { NavMapHandle } from '@/features/nav/mapTypes';
 import { buildPrompts } from '@/features/nav/prompts';
-import { SPEED_CHOICES } from '@/features/nav/simulation';
 import { kmShort, minutesShort } from '@/features/route/format';
-import { firstName } from '@/features/route/useAdvice';
 import { replayDateLabel } from '@/lib/dates';
 import { phrases, type NavLanguage } from '@/lib/navPhrases';
 import { speech } from '@/lib/speech';
@@ -23,9 +21,6 @@ import { tierInfo } from '@/theme';
 
 // MapLibre is large, so it is only fetched when a trip is started.
 const NavigationMap = lazy(() => import('@/features/nav/NavigationMap').then((m) => ({ default: m.NavigationMap })));
-
-/** How long Start waits for the AI-phrased summary (the route page has usually fetched it already). */
-export const SUMMARY_WAIT_MS = 2500;
 
 export function NavigationScreen() {
   useRrBody();
@@ -45,20 +40,6 @@ export function NavigationScreen() {
     retry: false,
     staleTime: Infinity,
   });
-  // Same key as the advice on the route page, so this is normally already cached.
-  const narration = useQuery({
-    queryKey: ['narrate', route.data?.route_id, language, firstName(profile.name)],
-    queryFn: () => narrate({ route_id: route.data!.route_id, user_name: firstName(profile.name) || null, language }),
-    enabled: !!route.data && languageKnown && which === 'flood_aware',
-    staleTime: Infinity,
-    retry: false,
-  });
-  const [waited, setWaited] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setWaited(true), SUMMARY_WAIT_MS);
-    return () => clearTimeout(t);
-  }, []);
-  const summaryReady = which === 'normal' || narration.isSuccess || narration.isError || waited;
 
   const failure = route.error ?? directions.error;
   if (failure || (!route.isPending && !route.data)) {
@@ -71,7 +52,7 @@ export function NavigationScreen() {
       </div>
     );
   }
-  if (!route.data || !directions.data || !languageKnown || !summaryReady) {
+  if (!route.data || !directions.data || !languageKnown) {
     return (
       <div className="rr-drive rr-drive-message" aria-busy="true">
         <h1>Getting your directions…</h1>
@@ -80,26 +61,19 @@ export function NavigationScreen() {
     );
   }
 
-  const summary =
-    which === 'flood_aware' && narration.data && narration.data.language === language
-      ? narration.data.text
-      : which === 'flood_aware' && language === 'en'
-        ? route.data.template_advice
-        : '';
-  return <DriveScreen route={route.data} directions={directions.data} which={which} language={language} summary={summary} />;
+  return <DriveScreen route={route.data} directions={directions.data} which={which} language={language} />;
 }
 
-type ScreenProps = { route: RouteResponse; directions: Directions; which: RouteLeg; language: NavLanguage; summary: string };
+type ScreenProps = { route: RouteResponse; directions: Directions; which: RouteLeg; language: NavLanguage };
 
-function DriveScreen({ route, directions, which, language, summary: liveSummary }: ScreenProps) {
+function DriveScreen({ route, directions, which, language }: ScreenProps) {
   const navigate = useNavigate();
-  const [summary] = useState(liveSummary); // frozen: a summary that arrives later must not restart the trip
   const { profile, store } = useProfile();
   const mapRef = useRef<NavMapHandle>(null);
   const controller = useRef<DriveController | null>(null);
   const [hud, setHud] = useState<Hud | null>(null);
   const [muted, setMuted] = useState(!profile.voiceOn);
-  const [multiplier, setMultiplier] = useState<number>(5);
+  const [running, setRunning] = useState(false);
   const [dragged, setDragged] = useState(false);
   const [fallback, setFallback] = useState<string | null>(null);
   const [voiceBlocked, setVoiceBlocked] = useState(false);
@@ -130,7 +104,8 @@ function DriveScreen({ route, directions, which, language, summary: liveSummary 
 
   useEffect(() => {
     const first = directions.steps[0];
-    const startText = [which === 'normal' ? say.preview : summary, say.depart(first)].filter(Boolean).join(' ');
+    // Only the first direction is spoken here: the advice itself is read once, on the route page.
+    const startText = [which === 'normal' ? say.preview : '', say.depart(first)].filter(Boolean).join(' ');
     const ctl = new DriveController(
       {
         directions,
@@ -160,7 +135,7 @@ function DriveScreen({ route, directions, which, language, summary: liveSummary 
       ctl.stop(); // leaving the page stops the car and any speech
       controller.current = null;
     };
-  }, [directions, language, which, summary]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [directions, language, which]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const endTrip = useCallback(() => {
     controller.current?.stop();
@@ -178,9 +153,9 @@ function DriveScreen({ route, directions, which, language, summary: liveSummary 
     setMuted(next);
     controller.current?.setMuted(next);
   };
-  const pick = (m: number) => {
-    setMultiplier(m);
-    controller.current?.setMultiplier(m);
+  const runLive = () => {
+    setRunning(true);
+    controller.current?.begin();
   };
   const enableVoice = () => {
     setVoiceBlocked(false);
@@ -221,7 +196,7 @@ function DriveScreen({ route, directions, which, language, summary: liveSummary 
       </section>
 
       <div className="rr-drive-badges">
-        <span className="rr-drive-badge sim">Simulated drive</span>
+        {running && <span className="rr-drive-badge sim">Simulated drive</span>}
         {hud?.starting && <span className="rr-drive-badge" data-testid="nav-starting">Starting your trip…</span>}
         {which === 'normal' && <span className="rr-drive-badge">Preview: usual route</span>}
         {replay && <span className="rr-drive-badge replay">Replay: {replayDateLabel(replay)} weather</span>}
@@ -253,14 +228,13 @@ function DriveScreen({ route, directions, which, language, summary: liveSummary 
           <div><dt>Distance</dt><dd data-testid="nav-km">{hud ? formatKm(hud.remainingM) : '–'}</dd></div>
         </dl>
         <div className="rr-drive-controls">
-          <div className="rr-drive-seg" role="group" aria-label="Simulation speed">
-            {SPEED_CHOICES.map((m) => (
-              <button key={m} type="button" aria-pressed={multiplier === m} onClick={() => pick(m)}>{m}×</button>
-            ))}
-          </div>
-          <button type="button" className="rr-btn" onClick={togglePause} aria-pressed={!!hud?.paused} disabled={arrived}>
-            {hud?.paused ? 'Resume' : 'Pause'}
-          </button>
+          {!running ? (
+            <button type="button" className="rr-btn primary rr-drive-run" onClick={runLive}>Show live run</button>
+          ) : (
+            <button type="button" className="rr-btn" onClick={togglePause} aria-pressed={!!hud?.paused} disabled={arrived}>
+              {hud?.paused ? 'Resume' : 'Pause'}
+            </button>
+          )}
           <button type="button" className="rr-btn" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute' : 'Mute'}</button>
           <button type="button" className="rr-btn danger" onClick={endTrip}>End trip</button>
         </div>

@@ -541,3 +541,26 @@ body.rr {
   .rr-drive-bar { gap: 8px 14px; }
 }
 .maplibregl-ctrl-attrib { font-size: 11px; }
+
+/* ---- cleaner hotspot cards ---- */
+.rr-card-grid { gap: 16px; }
+.rr-hcard { min-height: 0; border-radius: 16px; border: 1px solid var(--rr-line); border-left: 5px solid var(--rr-line); background: var(--rr-panel); transition: border-color .15s, transform .15s; }
+.rr-hcard.RED { border-left-color: var(--rr-red); }
+.rr-hcard.YELLOW { border-left-color: var(--rr-yellow); }
+.rr-hcard.GREEN { border-left-color: var(--rr-green); }
+.rr-hcard.LOW_RAIN { border-left-color: var(--rr-muted); }
+.rr-hcard:hover { border-color: var(--rr-accent); transform: translateY(-1px); }
+.rr-hcard-strip { display: none; }
+.rr-hcard-body { padding: 18px 20px 6px; gap: 0; }
+.rr-hcard-body .rr-tier { align-self: flex-start; font-size: 12px; padding: 3px 10px; }
+.rr-hcard-body h2 { font-size: 20px; line-height: 1.25; margin: 12px 0 2px; }
+.rr-hcard-area { font-size: 13px; letter-spacing: .02em; }
+.rr-hcard-risk { margin: 14px 0 0 !important; font-size: 24px; line-height: 1.15; font-family: var(--rr-display); }
+.rr-hcard-risk b { font-weight: 600; }
+.rr-hcard-reason { margin: 10px 0 0 !important; font-size: 13px; color: var(--rr-muted); -webkit-line-clamp: 2; }
+.rr-hcard-reported { margin: 12px 0 0 !important; padding-top: 0; border-top: 0; font-size: 13px; }
+.rr-hcard-reported span { color: var(--rr-muted); }
+.rr-hcard-btn { margin: 14px 20px 18px; background: transparent; border: 0; padding: 0; min-height: 0; justify-content: flex-start; color: var(--rr-accent); font-weight: 600; }
+.rr-hcard-btn::after { content: ' \2192'; }
+.rr-hcard-btn:hover { text-decoration: underline; }
+.rr-drive-run { min-height: 48px; padding: 0 22px; font-weight: 700; }

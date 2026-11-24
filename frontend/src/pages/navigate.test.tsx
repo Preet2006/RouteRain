@@ -109,21 +109,40 @@ afterEach(() => {
 });
 
 describe('the navigation screen', () => {
-  it('shows the next manoeuvre, the badges, the bars and speaks the summary then the first direction', async () => {
+  it('opens as a plain standing view: next manoeuvre, a "Show live run" button, nothing moving and nothing spoken', async () => {
     renderNav();
     expect(screen.getByText('Getting your directions…')).toBeTruthy();
     await screen.findByTestId('nav-screen');
-    await advance(50);
+    await advance(2000);
     expect(screen.getByTestId('nav-instruction').textContent).toBe('Turn left onto Golf Course Road');
     expect(screen.getByTestId('nav-distance').textContent).toMatch(/^1\.[45] km$/);
-    expect(screen.getByText('Simulated drive')).toBeTruthy();
     expect(screen.getByText(/Replay: 7 August 2026 weather/)).toBeTruthy();
     expect(screen.getByTestId('nav-km').textContent).toBe('3.7 km');
     expect(screen.getByTestId('nav-minutes').textContent).toMatch(/^\d+ min$/);
-    expect(screen.getByTestId('nav-eta').textContent).toMatch(/\d:\d\d\s?[ap]m/);
-    expect(said()[0]).toBe(`${LLM} Head east on Sohna Road.`);
-    expect(speechMock.speakResult.mock.calls[0][1]).toBe('en');
+    expect(screen.getByRole('button', { name: 'Show live run' })).toBeTruthy();
+    expect(screen.queryByText('Simulated drive')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^\d+×$/ })).toBeNull(); // no speed selector
+    expect(speechMock.speakResult).not.toHaveBeenCalled();
+    expect(api.narrate).not.toHaveBeenCalled(); // the advice is read on the route page, not again here
     expect(maps.engine[0]).toBe('maplibre');
+    const d = maps.updates.map((u) => u.distanceM);
+    expect(d.length).toBeGreaterThan(10);
+    expect(Math.max(...d)).toBe(0);
+  });
+
+  it('"Show live run" starts the simulated drive and reads only the first direction (not the advice again)', async () => {
+    await started();
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(500);
+    expect(said()[0]).toBe('Head east on Sohna Road.');
+    expect(said().filter((t) => t.includes('Rajiv Chowk') && t.includes('save'))).toHaveLength(0);
+    expect(speechMock.speakResult.mock.calls[0][1]).toBe('en');
+    expect(screen.getByText('Simulated drive')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show live run' })).toBeNull();
+    await advance(3000);
+    expect(lastDistance()).toBeGreaterThan(0);
   });
 
   it('shows nothing but the navigation screen (no site header or tab bar)', async () => {
@@ -133,6 +152,8 @@ describe('the navigation screen', () => {
 
   it('feeds the car position to the map every frame and keeps the distance moving forward', async () => {
     await started();
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(300);
     const n = maps.updates.length;
     await advance(1000);
     expect(maps.updates.length).toBeGreaterThan(n + 40);
@@ -143,19 +164,19 @@ describe('the navigation screen', () => {
 
   it('the banner moves on to each following manoeuvre, then to the arrival', async () => {
     await started();
-    fireEvent.click(screen.getByRole('button', { name: '20×' }));
-    await advance(6_000); // about 120 s of driving: on Golf Course Road
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(30_000); // about 150 s of driving at 5x: on Golf Course Road
     expect(screen.getByTestId('nav-instruction').textContent).toBe('Turn right');
-    await advance(5_000); // about 220 s: past the second turn
+    await advance(20_000); // about 250 s: past the second turn
     expect(screen.getByTestId('nav-instruction').textContent).toBe('Turn right onto Short Lane');
-    await advance(8_000);
+    await advance(40_000);
     expect(screen.getByTestId('nav-instruction').textContent).toBe('Arrive at Medanta');
   });
 
   it('runs to the end: the arrival card carries the route page numbers, avoided hotspots, and saves the trip', async () => {
     await started();
-    fireEvent.click(screen.getByRole('button', { name: '20×' }));
-    await advance(60_000);
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(90_000);
     const card = screen.getByTestId('nav-arrival');
     expect(within(card).getByRole('heading', { name: 'You have arrived' })).toBeTruthy();
     expect(within(card).getByTestId('arrival-time').textContent).toBe(compareRows(ROUTE)[0].routerain);
@@ -175,9 +196,9 @@ describe('the navigation screen', () => {
 
   it('the hotspot alert shows while the car is near it and matches the spoken line', async () => {
     await started();
-    fireEvent.click(screen.getByRole('button', { name: '20×' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
     let alert: HTMLElement | null = null;
-    for (let i = 0; i < 400 && !alert; i++) {
+    for (let i = 0; i < 900 && !alert; i++) {
       await advance(100);
       alert = screen.queryByTestId('nav-alert');
     }
@@ -186,12 +207,10 @@ describe('the navigation screen', () => {
     expect(said().filter((t) => t.startsWith('Rajiv Chowk, rated RED')).length).toBeLessThanOrEqual(1);
   });
 
-  it('speed selector and pause control the car', async () => {
+  it('pause stops the car and resume carries on', async () => {
     await started();
-    expect(screen.getByRole('button', { name: '5×' }).getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: '1×' }));
-    expect(screen.getByRole('button', { name: '1×' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: '5×' }).getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(800);
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
     await advance(200);
     const frozen = lastDistance();
@@ -204,23 +223,24 @@ describe('the navigation screen', () => {
 
   it('Mute stops speech and silences the prompts; Unmute brings them back', async () => {
     await started();
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(500);
     const before = said().length;
     fireEvent.click(screen.getByRole('button', { name: 'Mute' }));
     expect(speechMock.stop).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '20×' }));
-    await advance(4_000); // about 80 s of driving, with the first prompts already passed
+    await advance(16_000); // about 80 s of driving, with the first prompts already passed
     expect(said()).toHaveLength(before);
     expect(screen.getByRole('button', { name: 'Unmute' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Unmute' }));
-    await advance(40_000);
+    await advance(90_000);
     expect(said().length).toBeGreaterThan(before);
   });
 
   it('starts muted when voice is switched off in Settings (and never speaks)', async () => {
     profileStore.update({ voiceOn: false });
     await started();
-    fireEvent.click(screen.getByRole('button', { name: '20×' }));
-    await advance(60_000);
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(90_000);
     expect(speechMock.speakResult).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Unmute' })).toBeTruthy();
     expect(screen.getByTestId('nav-arrival')).toBeTruthy(); // the drive still runs
@@ -274,6 +294,8 @@ describe('the navigation screen', () => {
   it('offers "Tap to enable voice" when the browser blocks speech, and speaks once it is tapped', async () => {
     speechMock.speakResult.mockResolvedValue('blocked');
     await started();
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(300);
     const tap = screen.getByRole('button', { name: 'Tap to enable voice' });
     speechMock.speakResult.mockResolvedValue('ended');
     const calls = speechMock.speakResult.mock.calls.length;
@@ -286,48 +308,37 @@ describe('the navigation screen', () => {
     await started('/navigate/abc123abc123?which=normal');
     expect(api.getDirections).toHaveBeenCalledWith('abc123abc123', 'normal');
     expect(screen.getByText('Preview: usual route')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(300);
     expect(said()[0]).toBe('This is a preview of the usual route. Head east on Sohna Road.');
     expect(api.narrate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '20×' }));
-    await advance(60_000);
+    await advance(90_000);
     expect(screen.getByTestId('arrival-time').textContent).toBe(compareRows(ROUTE)[0].usual);
     expect(screen.getByTestId('arrival-km').textContent).toBe(compareRows(ROUTE)[1].usual);
     expect(screen.getByTestId('arrival-avoided').textContent).toBe('None');
     expect(said().some((t) => t.includes('keeps you clear'))).toBe(false);
   });
 
-  it('falls back to the standard advice sentence when the AI phrasing fails or is slow', async () => {
-    api.narrate.mockRejectedValue(new Error('down'));
-    await started();
-    expect(said()[0]).toBe(`${ROUTE.template_advice} Head east on Sohna Road.`);
-    cleanup();
-    speechMock.speakResult.mockClear();
-    api.narrate.mockReturnValue(new Promise(() => {})); // never answers
-    renderNav();
-    await advance(300);
-    expect(screen.queryByTestId('nav-screen')).toBeNull(); // still waiting for the summary
-    await screen.findByTestId('nav-screen', {}, { timeout: 4000 }); // gives up after 2.5 s
-    await advance(50);
-    expect(said()[0]).toBe(`${ROUTE.template_advice} Head east on Sohna Road.`);
-  });
-
   it('a Hindi preference without a Hindi voice on the device is spoken in English', async () => {
     profileStore.update({ language: 'hi' });
     hindi.available = false;
     await started();
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(300);
     expect(speechMock.speakResult.mock.calls[0][1]).toBe('en');
-    expect(said()[0]).toMatch(/Head east on Sohna Road\.$/);
+    expect(said()[0]).toBe('Head east on Sohna Road.');
   });
 
-  it('Hindi with a Hindi voice speaks only Hindi templates (the English summary is left out)', async () => {
+  it('Hindi with a Hindi voice speaks only Hindi templates', async () => {
     profileStore.update({ language: 'hi' });
     hindi.available = true;
     api.narrate.mockResolvedValue({ text: 'यह मार्ग राजीव चौक से बचता है।', source: 'template', language: 'hi', scenario: ROUTE.scenario });
     await started();
+    fireEvent.click(screen.getByRole('button', { name: 'Show live run' }));
+    await advance(300);
     expect(speechMock.speakResult.mock.calls[0][1]).toBe('hi');
-    expect(said()[0]).toBe('यह मार्ग राजीव चौक से बचता है। Sohna Road पर पूर्व की ओर चलें।');
-    fireEvent.click(screen.getByRole('button', { name: '20×' }));
-    await advance(60_000);
+    expect(said()[0]).toBe('Sohna Road पर पूर्व की ओर चलें।');
+    await advance(90_000);
     expect(said().filter((t) => t.startsWith('अब ')).length).toBe(3);
     expect(said()[said().length - 1]).toBe('आप Medanta पहुँच गए हैं।');
   });

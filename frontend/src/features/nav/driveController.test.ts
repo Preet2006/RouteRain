@@ -23,6 +23,7 @@ function setup(over: Partial<DriveDeps> = {}) {
     destinationName: 'Medanta',
     startText: START,
     multiplier: 10,
+    autoStart: true,
     holdForStartLine: false,
     speak: vi.fn(async (text: string): Promise<SpeakResult> => {
       spoken.push({ text, atM });
@@ -315,5 +316,40 @@ describe('the opening line', () => {
     s.ctl.setMuted(true);
     s.run(10);
     expect(s.frames[s.frames.length - 1].distanceM).toBeGreaterThan(0);
+  });
+});
+
+describe('the standing view (before "Show live run")', () => {
+  it('shows the car at the start, speaks nothing and does not move until begin()', () => {
+    const s = setup({ autoStart: false });
+    s.ctl.start();
+    s.run(300);
+    expect(s.frames.length).toBe(300);
+    expect(s.frames.every((f) => f.distanceM === 0)).toBe(true);
+    expect(s.spoken).toHaveLength(0);
+    expect(s.huds[s.huds.length - 1]).toMatchObject({ idle: true, starting: false, distanceM: 0 });
+    expect(s.ctl.isIdle).toBe(true);
+  });
+
+  it('begin() starts the run: the opening line is spoken once, then the car drives', () => {
+    const s = setup({ autoStart: false });
+    s.ctl.start();
+    s.run(20);
+    s.ctl.begin();
+    s.ctl.begin(); // a second press does nothing
+    s.run(300);
+    expect(s.spoken[0].text).toBe(START);
+    expect(s.spoken.filter((x) => x.text === START)).toHaveLength(1);
+    expect(s.frames[s.frames.length - 1].distanceM).toBeGreaterThan(0);
+    expect(s.huds[s.huds.length - 1].idle).toBe(false);
+  });
+
+  it('begin() while the standing view has been shown for a long time does not jump the car', () => {
+    const s = setup({ autoStart: false });
+    s.ctl.start();
+    s.run(5000); // 80 s standing
+    s.ctl.begin();
+    s.run(3);
+    expect(s.frames[s.frames.length - 1].distanceM).toBeLessThan(10);
   });
 });
