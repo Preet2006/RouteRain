@@ -26,8 +26,8 @@ function Fit({ route }: { route: RouteResponse }) {
  */
 export function RouteMap({ route }: { route: RouteResponse }) {
   return (
-    <div className="rr-map rr-route-map" data-testid="route-map">
-      <MapContainer center={GURUGRAM_CENTER} zoom={12} scrollWheelZoom className="rr-map-inner" aria-label="Map of the usual route and the RouteRain route">
+    <div className="rr-map rr-route-map" data-testid="route-map" role="region" aria-label="Map of the usual route and the RouteRain route">
+      <MapContainer center={GURUGRAM_CENTER} zoom={12} scrollWheelZoom className="rr-map-inner">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

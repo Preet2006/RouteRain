@@ -28,7 +28,7 @@ export function PreferenceFields({ value, onChange }: { value: Prefs; onChange: 
   }
 
   return (
-    <>
+    <div className="rr-pref-grid">
       <fieldset className="rr-fieldset">
         <legend>Voice advice</legend>
         <label className="rr-check">
@@ -75,6 +75,6 @@ export function PreferenceFields({ value, onChange }: { value: Prefs; onChange: 
           <span><b>Balanced</b><small>Avoid RED only; YELLOW is allowed.</small></span>
         </label>
       </fieldset>
-    </>
+    </div>
   );
 }

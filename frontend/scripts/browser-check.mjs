@@ -38,18 +38,16 @@ const browser = await puppeteer.launch({ executablePath, headless: true, args: [
 const problems = [];
 const summary = [];
 
-async function open(width, height, { profile = PROFILE, replay = true, demo = false, splash = false } = {}) {
+async function open(width, height, { profile = PROFILE, demo = false } = {}) {
   const page = await browser.newPage();
   await page.setBypassCSP(true); // only so axe can be injected; the site's own CSP stays strict
   await page.setViewport({ width, height, deviceScaleFactor: 1 });
-  await page.evaluateOnNewDocument((p, r, d, sp) => {
+  await page.evaluateOnNewDocument((p, d) => {
     try {
-      if (!sp) sessionStorage.setItem('routerain.splash', '1'); // skip the entry screen unless it is being tested
       if (p) localStorage.setItem('routerain.profile', JSON.stringify(p)); else localStorage.removeItem('routerain.profile');
-      if (r) sessionStorage.setItem('routerain.scenario', JSON.stringify({ mode: 'replay', date: '2026-08-07' }));
       if (d) localStorage.setItem('routerain.demo', '1');
     } catch { /* storage blocked */ }
-  }, profile, replay, demo, splash);
+  }, profile, demo);
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/tile\.openstreetmap|Failed to load resource/.test(m.text())) problems.push(`console: ${m.text()}`); });
   return page;
@@ -86,6 +84,45 @@ async function layout(page, name, kind, w, h) {
   if (kind === 'map' && w >= 1366 && m.map && m.map.width < w * 0.5) problems.push(`[layout] ${name} @${w}: map is only ${Math.round(100 * m.map.width / w)}% of the width`);
 }
 
+
+// Card orientation: cards per row, equal heights within a row, no overlap; Settings cards aligned.
+const cardRows = [];
+async function cards(page, name, w) {
+  if (name === 'hotspots') {
+    const m = await page.evaluate(() => {
+      const els = [...document.querySelectorAll('.rr-card-grid > li')];
+      const rects = els.map((e) => e.getBoundingClientRect());
+      const firstTop = rects[0].top;
+      const perRow = rects.filter((r) => Math.abs(r.top - firstTop) < 2).length;
+      const rows = [];
+      rects.forEach((r) => { const k = Math.round(r.top); (rows[k] ||= []).push(Math.round(r.height)); });
+      const unevenRows = Object.values(rows).filter((hs) => new Set(hs).size > 1).length;
+      const overlap = rects.some((a, i) => rects.some((b, j) => i < j && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1));
+      const gridW = document.querySelector('.rr-card-grid').getBoundingClientRect().width;
+      const clipped = els.filter((e) => e.scrollWidth > e.clientWidth + 1).length;
+      return { count: els.length, perRow, unevenRows, overlap, cardW: Math.round(rects[0].width), gridW: Math.round(gridW), clipped };
+    });
+    cardRows.push({ page: name, width: w, ...m });
+    const want = w >= 1200 ? 4 : w >= 900 ? 3 : w >= 600 ? 2 : 1;
+    if (m.count !== 12) problems.push(`[cards] ${w}: expected 12 cards, got ${m.count}`);
+    if (m.perRow !== want) problems.push(`[cards] ${w}: ${m.perRow} cards per row, expected ${want}`);
+    if (m.unevenRows) problems.push(`[cards] ${w}: ${m.unevenRows} row(s) with uneven card heights`);
+    if (m.overlap || m.clipped) problems.push(`[cards] ${w}: overlapping or clipped cards`);
+  }
+  if (name === 'settings') {
+    const m = await page.evaluate(() => {
+      const c = [...document.querySelectorAll('.rr-settings-grid > .rr-card')].map((e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), left: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height) }; });
+      return c;
+    });
+    const [you, prefs, data] = m;
+    cardRows.push({ page: name, width: w, cards: m.length, youTop: you.top, prefsTop: prefs.top, youH: you.h, prefsH: prefs.h, youW: you.w, prefsW: prefs.w, dataW: data && data.w });
+    if (m.length !== 3) problems.push(`[settings] ${w}: expected 3 cards, got ${m.length}`);
+    if (w >= 901 && (Math.abs(you.top - prefs.top) > 1 || Math.abs(you.h - prefs.h) > 1 || Math.abs(you.w - prefs.w) > 1)) problems.push(`[settings] ${w}: first two cards are not aligned (top ${you.top}/${prefs.top}, height ${you.h}/${prefs.h}, width ${you.w}/${prefs.w})`);
+    if (w >= 901 && data && data.w < you.w + prefs.w) problems.push(`[settings] ${w}: Your data card does not span the full row`);
+    if (w <= 900 && (Math.abs(you.left - prefs.left) > 1)) problems.push(`[settings] ${w}: cards are not in one column on a narrow screen`);
+  }
+}
+
 async function shoot(page, name, width) {
   await page.screenshot({ path: path.join(outDir, `${name}-${width}.png`), fullPage: false });
 }
@@ -94,10 +131,14 @@ const demo = flag('--demo');
 const route = demo ? { route_id: 'demo-trip-1' } : await api('/route', {
   origin: { lat: 28.4951, lon: 77.0891, label: 'Cyber Hub' }, destination: { lat: 28.4395, lon: 77.0422, label: 'Medanta The Medicity' },
   caution: 'cautious', mode: 'replay', date: '2026-08-07' });
+const R = '?replay=2026-08-07';
 const PAGES = [
   ['entry', '/', '.rr-entry-name', 'entry'],
-  ['plan', '/plan', 'form[aria-label="Plan a trip"]', 'map'],
-  ['hotspots', '/hotspots', '.rr-home-panel h1', 'map'],
+  ['plan-live', '/plan', 'form[aria-label="Plan a trip"]', 'map'],
+  ['plan-replay', `/plan${R}`, 'form[aria-label="Plan a trip"]', 'map'],
+  ['hotspots', `/hotspots${R}`, '.rr-hcard', 'text'],
+  ['hotspot-detail', `/hotspots/H02${R}`, '.rr-detail-panel h1', 'map'],
+  ['hotspot-lowrain', '/hotspots/H01?replay=2025-07-09', '.rr-detail-panel h1', 'map'],
   ['route', `/route/${route.route_id}`, '[data-testid="advice-text"]', 'map'],
   ['settings', '/settings', '.rr-text h1', 'text'],
   ['about', '/about', '.rr-text h1', 'text'],
@@ -109,17 +150,17 @@ for (const [w, h] of VIEWPORTS) {
     try {
       await page.goto(base + url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForSelector(ready, { timeout: 30000 });
-      if (name === 'hotspots') await page.waitForSelector('.rr-marker', { timeout: 60000 }).catch(() => problems.push(`[home] no markers at ${w}`));
-      await new Promise((r) => setTimeout(r, 1200)); // let tiles/fly animations settle
+            await new Promise((r) => setTimeout(r, 1200)); // let tiles/fly animations settle
       await shoot(page, name, w);
       if (!flag('--no-axe')) await audit(page, name, w);
       await layout(page, name, kind, w, h);
+      await cards(page, name, w);
     } catch (e) { problems.push(`[load] ${name} @${w}: ${e.message}`); }
     await page.close();
   }
   // first-run pages (no profile)
   for (const [name, url, ready] of [['setup', '/setup', 'h1']]) {
-    const page = await open(w, h, { profile: null, replay: false });
+    const page = await open(w, h, { profile: null });
     try {
       await page.goto(base + url, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector(ready, { timeout: 15000 });
@@ -134,6 +175,8 @@ console.log(`Browser: ${executablePath}`);
 console.table(summary);
 console.log('\nLayout (full-screen check):');
 console.table(layoutRows);
+console.log('\nCards:');
+console.table(cardRows);
 console.log(problems.length ? `\n${problems.length} problem(s):\n- ${[...new Set(problems)].join('\n- ')}` : '\nNo accessibility violations, no horizontal overflow, no console errors.');
 console.log(`Screenshots: ${outDir}`);
 await browser.close();

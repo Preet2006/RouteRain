@@ -6,7 +6,7 @@ import { ApiError, getRoute } from '@/api/client';
 import { compareRows, effectLine } from '@/features/route/format';
 import { RouteMap } from '@/features/route/RouteMap';
 import { useAdvice } from '@/features/route/useAdvice';
-import { replayDateLabel } from '@/pages/Home';
+import { replayDateLabel } from '@/lib/dates';
 import { useProfile } from '@/lib/useProfile';
 import { tierInfo } from '@/theme';
 

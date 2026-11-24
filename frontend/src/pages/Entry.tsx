@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { Logo } from '@/components/Logo';
 import { useRrBody } from '@/components/Shell';
 import { useProfile } from '@/lib/useProfile';
 
+const POINTS = ['12 monitored hotspots', 'Risk explained in plain words', 'Flood-aware route advice'];
+
 /**
- * The entry screen (route "/"): the app's name in the centre, the tagline and one big Enter button.
+ * The entry screen (route "/"): the app's name in the centre, the tagline and one Enter button.
  * First-time visitors go on to setup, returning visitors straight to trip planning.
  */
 export function Entry() {
@@ -30,23 +32,26 @@ export function Entry() {
   return (
     <main className="rr-entry" id="main" aria-label="RouteRain">
       <div className="rr-rain" aria-hidden="true">
-        {Array.from({ length: 18 }, (_, i) => (
-          <i key={i} style={{ left: `${(i * 5.7 + 3) % 100}%`, animationDelay: `${(i % 9) * 0.35}s`, animationDuration: `${2.4 + (i % 5) * 0.5}s` }} />
+        {Array.from({ length: 14 }, (_, i) => (
+          <i key={i} style={{ left: `${(i * 7.1 + 3) % 100}%`, animationDelay: `${(i % 9) * 0.45}s`, animationDuration: `${3 + (i % 5) * 0.6}s` }} />
         ))}
       </div>
       <div className="rr-entry-body">
-        <Logo size={88} />
+        <Logo size={64} />
+        <p className="rr-entry-eyebrow">Monsoon intelligence · Gurugram</p>
         <h1 className="rr-entry-name">Route<b>Rain</b></h1>
+        <span className="rr-entry-rule" aria-hidden="true" />
         <p className="rr-entry-tag">Know before you go: flood-aware routes for Gurugram</p>
+        <ul className="rr-entry-points" aria-label="What RouteRain does">
+          {POINTS.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
         {name && <p className="rr-entry-back">Welcome back, {name}</p>}
         <button type="button" className="rr-btn primary rr-entry-btn" onClick={enter} autoFocus>
-          Enter
+          Enter <span aria-hidden="true">→</span>
         </button>
       </div>
-      <footer className="rr-entry-foot">
-        <span>Group 6 · MDI Gurgaon</span>
-        <Link to="/about">A guide, not a guarantee</Link>
-      </footer>
     </main>
   );
 }

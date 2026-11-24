@@ -31,7 +31,6 @@ vi.mock('@/api/client', () => ({
     tiers: { RED: 0, YELLOW: 0, GREEN: 0, LOW_RAIN: 0 }, hotspots: [],
   }),
 }));
-vi.mock('@/features/home/HotspotMap', () => ({ HotspotMap: () => null }));
 vi.mock('@/features/plan/PickMap', () => ({ PickMap: () => null }));
 
 vi.mock('@/lib/speech', () => ({

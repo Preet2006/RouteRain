@@ -2,7 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { BareLayout, Shell } from '@/components/Shell';
 import { Entry } from '@/pages/Entry';
-import { Home } from '@/pages/Home';
+import { HotspotDetail } from '@/pages/HotspotDetail';
+import { Hotspots } from '@/pages/Hotspots';
 import { About } from '@/pages/About';
 import { NotFound } from '@/pages/Placeholders';
 import { Plan } from '@/pages/Plan';
@@ -21,7 +22,8 @@ export function App() {
         <Route path="/ready" element={<Ready />} />
       </Route>
       <Route element={<Shell />}>
-        <Route path="/hotspots" element={<Home />} />
+        <Route path="/hotspots" element={<Hotspots />} />
+        <Route path="/hotspots/:id" element={<HotspotDetail />} />
         <Route path="/plan" element={<Plan />} />
         <Route path="/route/:routeId" element={<RouteResult />} />
         <Route path="/settings" element={<Settings />} />

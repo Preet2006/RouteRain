@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const api = vi.hoisted(() => ({ createRoute: vi.fn(), searchPlaces: vi.fn(), geocodePlace: vi.fn(), getRoute: vi.fn() }));
+const api = vi.hoisted(() => ({ createRoute: vi.fn(), searchPlaces: vi.fn(), geocodePlace: vi.fn(), getRoute: vi.fn(), getScenarios: vi.fn(), getHotspots: vi.fn() }));
 vi.mock('@/api/client', () => ({
   ApiError: class ApiError extends Error {
     constructor(readonly kind: string, message: string) {
@@ -16,13 +16,15 @@ vi.mock('@/api/client', () => ({
   searchPlaces: api.searchPlaces,
   geocodePlace: api.geocodePlace,
   getRoute: api.getRoute,
+  getScenarios: api.getScenarios,
+  getHotspots: api.getHotspots,
 }));
 const geo = vi.hoisted(() => ({ locate: vi.fn() }));
 vi.mock('@/lib/geolocation', async (orig) => ({ ...(await orig<typeof import('@/lib/geolocation')>()), locate: geo.locate }));
 // Leaflet needs real layout: the pick map is replaced by a stub that exposes "click the map".
 vi.mock('@/features/plan/PickMap', () => ({
-  PickMap: (p: { from: { label: string } | null; to: { label: string } | null; picking: string | null; onPick: (a: number, b: number) => void }) => (
-    <div data-testid="pick-map" data-picking={p.picking ?? ''} data-from={p.from?.label ?? ''} data-to={p.to?.label ?? ''}>
+  PickMap: (p: { from: { label: string } | null; to: { label: string } | null; picking: string | null; onPick: (a: number, b: number) => void; hotspots?: unknown[] }) => (
+    <div data-testid="pick-map" data-picking={p.picking ?? ''} data-from={p.from?.label ?? ''} data-to={p.to?.label ?? ''} data-hotspots={p.hotspots?.length ?? 0}>
       <button type="button" onClick={() => p.onPick(28.4595, 77.0266)}>simulate map click</button>
     </div>
   ),
@@ -44,12 +46,12 @@ function Probe() {
   const l = useLocation();
   return <div data-testid="loc" data-path={l.pathname} />;
 }
-function renderPlan(state?: unknown) {
+function renderPlan(state?: unknown, initial?: import('@/lib/scenario').ScenarioChoice) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[{ pathname: '/plan', state }]}>
-        <ScenarioProvider>
+        <ScenarioProvider initial={initial}>
           <Routes>
             <Route path="/plan" element={<Plan />} />
             <Route path="*" element={<Probe />} />
@@ -73,6 +75,15 @@ beforeEach(() => {
   api.geocodePlace.mockResolvedValue({ lat: 28.47, lon: 77.04, label: 'x' });
   api.createRoute.mockResolvedValue({ route_id: 'abc123abc123' });
   geo.locate.mockResolvedValue({ lat: 28.46, lon: 77.03, accuracyM: 20 });
+  api.getScenarios.mockResolvedValue({
+    default_mode: 'live',
+    scenarios: [{ date: '2026-08-07', label: '7 August 2026' }, { date: '2026-07-08', label: '8 July 2026' }],
+  });
+  const spot = (id: string, tier: string) => ({ id, name: `Spot ${id}`, lat: 28.4, lon: 77, tier, probability: 0.3, explanation: '', reported_outcome: null, type: 'chowk' });
+  api.getHotspots.mockResolvedValue({
+    scenario: { mode: 'live', date: null, forecast_generated_at: 'x' }, tiers: { RED: 1, YELLOW: 1, GREEN: 1, LOW_RAIN: 0 },
+    hotspots: [spot('H01', 'RED'), spot('H02', 'YELLOW'), spot('H03', 'GREEN')],
+  });
 });
 afterEach(() => {
   cleanup();
@@ -205,6 +216,7 @@ describe('finding routes', () => {
     const user = userEvent.setup();
     renderPlan();
     expect(screen.getByRole('status').textContent).toMatch(/live forecast/i);
+    expect(screen.getByRole('button', { name: 'See live' }).getAttribute('aria-pressed')).toBe('true');
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Find routes' }));
     await waitFor(() => expect(screen.getByTestId('loc').dataset.path).toBe('/route/abc123abc123'));
@@ -216,9 +228,8 @@ describe('finding routes', () => {
   });
 
   it('plans for the replay day on screen and says so', async () => {
-    window.sessionStorage.setItem('routerain.scenario', JSON.stringify({ mode: 'replay', date: '2026-08-07' }));
     const user = userEvent.setup();
-    renderPlan();
+    renderPlan(undefined, { mode: 'replay', date: '2026-08-07' });
     expect(screen.getByRole('status').textContent).toMatch(/replay: 7 august 2026 weather/i);
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Find routes' }));
@@ -262,5 +273,101 @@ describe('finding routes', () => {
     await user.click(screen.getByRole('button', { name: 'Find routes' }));
     const busy = (await screen.findByRole('button', { name: /finding routes/i })) as HTMLButtonElement;
     expect(busy.disabled).toBe(true);
+  });
+});
+
+
+describe('weather chooser: See live / Replay incident', () => {
+  it('starts on live with no replay banner and no date picker, even though replay days exist', async () => {
+    renderPlan();
+    expect(screen.getByRole('button', { name: 'See live' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Replay incident' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByLabelText('Incident date')).toBeNull();
+    expect(screen.queryByText(/replay:/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Change' })).toBeNull();
+  });
+
+  it('Replay incident shows a date picker; the date can be changed; See live goes back', async () => {
+    const user = userEvent.setup();
+    renderPlan();
+    const replayBtn = screen.getByRole('button', { name: 'Replay incident' }) as HTMLButtonElement;
+    await waitFor(() => expect(replayBtn.disabled).toBe(false));
+    await user.click(replayBtn);
+    const date = (await screen.findByLabelText('Incident date')) as HTMLSelectElement;
+    expect([...date.options].map((o) => o.textContent)).toEqual(['7 August 2026', '8 July 2026']);
+    expect(date.value).toBe('2026-08-07');
+    expect(screen.getByRole('status').textContent).toMatch(/replay: 7 august 2026 weather/i);
+    await user.selectOptions(date, '2026-07-08');
+    expect(screen.getByRole('status').textContent).toMatch(/replay: 8 july 2026 weather/i);
+    await user.click(screen.getByRole('button', { name: 'See live' }));
+    expect(screen.queryByLabelText('Incident date')).toBeNull();
+    expect(screen.getByRole('status').textContent).toMatch(/live forecast/i);
+  });
+
+  it('plans for the chosen incident date', async () => {
+    const user = userEvent.setup();
+    renderPlan();
+    const replayBtn = screen.getByRole('button', { name: 'Replay incident' }) as HTMLButtonElement;
+    await waitFor(() => expect(replayBtn.disabled).toBe(false));
+    await user.click(replayBtn);
+    await user.selectOptions(await screen.findByLabelText('Incident date'), '2026-07-08');
+    await user.type(from(), 'cyber');
+    await user.click(await screen.findByRole('option', { name: /^cyber hub/i }));
+    await user.type(to(), 'medanta');
+    await user.click(await screen.findByRole('option', { name: /medanta/i }));
+    await user.click(screen.getByRole('button', { name: 'Find routes' }));
+    await waitFor(() => expect(api.createRoute).toHaveBeenCalled());
+    expect(api.createRoute.mock.calls[0][0]).toMatchObject({ mode: 'replay', date: '2026-07-08' });
+  });
+
+  it('replay is disabled while the list of days is unavailable', async () => {
+    api.getScenarios.mockResolvedValue({ default_mode: 'live', scenarios: [] });
+    renderPlan();
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Replay incident' }) as HTMLButtonElement).disabled).toBe(true));
+  });
+});
+
+describe('hotspots on the plan page', () => {
+  it('shows dots on the map by default and a one-line summary linking to the Hotspots page', async () => {
+    renderPlan();
+    expect(await screen.findByText(/2 hotspots at risk today/i)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View all' }).getAttribute('href')).toBe('/hotspots');
+    expect(screen.getByTestId('pick-map').dataset.hotspots).toBe('3');
+    expect((screen.getByRole('checkbox', { name: 'Show hotspots' }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('the Show hotspots toggle hides and shows the dots', async () => {
+    const user = userEvent.setup();
+    renderPlan();
+    await screen.findByText(/at risk/i);
+    await user.click(screen.getByRole('checkbox', { name: 'Show hotspots' }));
+    expect(screen.getByTestId('pick-map').dataset.hotspots).toBe('0');
+    await user.click(screen.getByRole('checkbox', { name: 'Show hotspots' }));
+    expect(screen.getByTestId('pick-map').dataset.hotspots).toBe('3');
+  });
+
+  it('the summary names the replay day, and handles none at risk and a single one', async () => {
+    api.getHotspots.mockResolvedValue({
+      scenario: { mode: 'replay', date: '2026-08-07', forecast_generated_at: null }, tiers: { RED: 1, YELLOW: 0, GREEN: 0, LOW_RAIN: 0 },
+      hotspots: [{ id: 'H01', name: 'A', lat: 1, lon: 1, tier: 'RED', probability: 0.4, explanation: '', reported_outcome: null, type: '' }],
+    });
+    renderPlan(undefined, { mode: 'replay', date: '2026-08-07' });
+    expect(await screen.findByText(/1 hotspot at risk on 7 August 2026/)).toBeTruthy();
+    cleanup();
+    api.getHotspots.mockResolvedValue({
+      scenario: { mode: 'live', date: null, forecast_generated_at: 'x' }, tiers: { RED: 0, YELLOW: 0, GREEN: 1, LOW_RAIN: 0 },
+      hotspots: [{ id: 'H01', name: 'A', lat: 1, lon: 1, tier: 'GREEN', probability: 0.02, explanation: '', reported_outcome: null, type: '' }],
+    });
+    renderPlan();
+    expect(await screen.findByText(/no hotspots at risk today/i)).toBeTruthy();
+  });
+
+  it('keeps working (no summary, no dots) when the hotspots cannot be loaded', async () => {
+    api.getHotspots.mockRejectedValue(new ApiError('network', "Can't reach the RouteRain server."));
+    renderPlan();
+    await waitFor(() => expect(api.getHotspots).toHaveBeenCalled());
+    expect(screen.queryByText(/at risk/i)).toBeNull();
+    expect(screen.getByTestId('pick-map').dataset.hotspots).toBe('0');
+    expect(screen.getByRole('button', { name: 'Find routes' })).toBeTruthy();
   });
 });

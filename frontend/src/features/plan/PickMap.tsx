@@ -3,7 +3,10 @@ import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 
+import type { Hotspot } from '@/api/schemas';
 import type { SavedPlace } from '@/lib/storage';
+
+import { HotspotDots } from './HotspotDots';
 import { GURUGRAM_CENTER } from '@/theme';
 
 export type PickTarget = 'from' | 'to' | null;
@@ -29,18 +32,26 @@ function Fit({ from, to }: { from: SavedPlace | null; to: SavedPlace | null }) {
   return null;
 }
 
-type Props = { from: SavedPlace | null; to: SavedPlace | null; picking: PickTarget; onPick: (lat: number, lon: number) => void };
+type Props = {
+  from: SavedPlace | null;
+  to: SavedPlace | null;
+  picking: PickTarget;
+  onPick: (lat: number, lon: number) => void;
+  /** Hotspots to show as small dots (hidden when empty or when the user turns them off). */
+  hotspots?: Hotspot[];
+};
 
 /** Small map for trip planning: shows pins A and B, and while "Pick on map" is on, a click sets the point. */
-export function PickMap({ from, to, picking, onPick }: Props) {
+export function PickMap({ from, to, picking, onPick, hotspots = [] }: Props) {
   return (
-    <div className={`rr-map rr-plan-map${picking ? ' picking' : ''}`} data-testid="pick-map">
-      <MapContainer center={GURUGRAM_CENTER} zoom={12} scrollWheelZoom className="rr-map-inner" aria-label="Map for choosing pickup and drop points">
+    <div className={`rr-map rr-plan-map${picking ? ' picking' : ''}`} data-testid="pick-map" role="region" aria-label="Map for choosing pickup and drop points">
+      <MapContainer center={GURUGRAM_CENTER} zoom={12} scrollWheelZoom className="rr-map-inner">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <Clicks target={picking} onPick={onPick} />
+        <HotspotDots hotspots={hotspots} />
         <Fit from={from} to={to} />
         {from && <Marker position={[from.lat, from.lon]} icon={A} title={`Pickup: ${from.label}`} alt="Pickup point" />}
         {to && <Marker position={[to.lat, to.lon]} icon={B} title={`Drop: ${to.label}`} alt="Drop point" />}

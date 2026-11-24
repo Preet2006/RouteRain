@@ -95,7 +95,7 @@ def test_hotspots_live(world):
     r = client.get("/api/v2/hotspots").json()
     assert r["scenario"] == {"mode": "live", "date": None, "forecast_generated_at": "2026-08-07T00:00:00+00:00"}
     assert len(r["hotspots"]) == 12 and r["tiers"]["RED"] == 1
-    assert set(r["hotspots"][0]) == {"id", "name", "lat", "lon", "tier", "probability", "explanation", "reported_outcome"}
+    assert set(r["hotspots"][0]) == {"id", "name", "lat", "lon", "tier", "probability", "explanation", "reported_outcome", "type"}
     assert all(h["reported_outcome"] is None for h in r["hotspots"])
 
 
@@ -115,6 +115,75 @@ def test_hotspots_input_errors(world):
     assert client.get("/api/v2/hotspots", params={"mode": "replay", "date": "2020-01-01"}).status_code == 404
     assert client.get("/api/v2/hotspots", params={"mode": "bogus"}).status_code == 422
     assert client.get("/api/v2/hotspots", params={"mode": "replay", "date": "07-01-2020"}).status_code == 422
+
+
+needs_model = pytest.mark.skipif(not os.path.exists(web.MODEL_PATH), reason="models/risk_model.pkl not present")
+
+# ---- /hotspots/{id} (the detail page) -------------------------------------------------------------------
+
+FEATURES = {"rain_24h": 48.2, "rain_max_1h": 21.0, "rain_max_3h": 33.5, "rain_prev_3d": 38.0,
+            "soil_moisture_surface": 0.42, "rain_season_cumulative": 611.4, "month": 8, "elevation_m": 999}
+
+
+def test_detail_of_a_scored_red_hotspot(world):
+    next(i for i in world["items"] if i["hotspot_id"] == "H03")["features"] = FEATURES
+    r = client.get("/api/v2/hotspots/H03", params={"mode": "replay", "date": "2026-08-07"})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["scenario"]["mode"] == "replay" and j["hotspot"]["id"] == "H03" and j["hotspot"]["tier"] == "RED"
+    assert j["hotspot"]["probability"] == 0.5 and j["hotspot"]["reported_outcome"] == "flooded"
+    assert j["buffer_m"] == 500
+    assert set(j["terrain"]) == {"elevation_m", "sink_depth_m", "slope_deg", "catchment_cells"}
+    assert j["conditions"]["rain_24h"] == 48.2 and j["conditions"]["soil_moisture_surface"] == 0.42
+    assert set(j["conditions"]) == {"rain_24h", "rain_max_1h", "rain_max_3h", "rain_prev_3d", "soil_moisture_surface", "rain_season_cumulative"}
+    assert j["history"]["recorded_floods"] == 14 and j["history"]["first_date"] and j["history"]["last_date"]
+    assert j["infrastructure"]["flagged"] is False and j["infrastructure"]["source_url"] is None
+
+
+def test_detail_buffer_depends_on_tier(world):
+    world["items"] = spec({"H03": "YELLOW", "H05": "GREEN"}, {"H03": 0.2})
+    for hid, expected in (("H03", 300), ("H05", 300)):
+        assert client.get(f"/api/v2/hotspots/{hid}", params={"mode": "replay", "date": "2026-08-07"}).json()["buffer_m"] == expected
+
+
+def test_detail_of_a_low_rain_hotspot_has_no_scores_or_conditions(world):
+    world["items"] = spec({"H03": "RED", "H05": "LOW_RAIN"}, {"H03": 0.5})
+    j = client.get("/api/v2/hotspots/H05", params={"mode": "replay", "date": "2026-08-07"}).json()
+    assert j["hotspot"]["tier"] == "LOW_RAIN" and j["hotspot"]["probability"] is None
+    assert j["conditions"] is None and j["buffer_m"] == 300
+    assert j["terrain"]["elevation_m"] > 0 and j["history"]["recorded_floods"] == 11  # the static facts are still shown
+
+
+def test_detail_carries_the_infrastructure_note_and_its_source(world):
+    j = client.get("/api/v2/hotspots/H01", params={"mode": "replay", "date": "2026-08-07"}).json()
+    assert j["infrastructure"]["flagged"] is True
+    assert "choked drain" in j["infrastructure"]["note"] and j["infrastructure"]["source_url"].startswith("http")
+    assert j["infrastructure"]["evidence_date"] == "2025-12-04"
+
+
+def test_detail_live_mode(world):
+    world["items"][0]["features"] = FEATURES
+    j = client.get("/api/v2/hotspots/H03").json()
+    assert j["scenario"]["mode"] == "live" and j["hotspot"]["id"] == "H03" and j["conditions"]["rain_24h"] == 48.2
+
+
+def test_detail_errors(world):
+    assert client.get("/api/v2/hotspots/H99", params={"mode": "replay", "date": "2026-08-07"}).status_code == 404
+    assert client.get("/api/v2/hotspots/H99").json()["detail"] == "No hotspot with that id."
+    assert client.get("/api/v2/hotspots/H03", params={"mode": "replay"}).status_code == 422
+    assert client.get("/api/v2/hotspots/H03", params={"mode": "replay", "date": "2020-01-01"}).status_code == 404
+    assert client.get("/api/v2/hotspots/H03", params={"mode": "replay", "date": "bad"}).status_code == 422
+
+
+@needs_model
+def test_real_detail_for_a_scored_and_a_low_rain_hotspot():
+    low = client.get("/api/v2/hotspots/H01", params={"mode": "replay", "date": "2025-07-09"}).json()
+    assert low["hotspot"]["tier"] == "LOW_RAIN" and low["conditions"] is None and low["hotspot"]["type"] == "chowk/highway"
+    scored = client.get("/api/v2/hotspots/H02", params={"mode": "replay", "date": "2025-07-09"}).json()
+    assert scored["hotspot"]["tier"] in ("RED", "YELLOW", "GREEN") and scored["hotspot"]["probability"] is not None
+    c = scored["conditions"]
+    assert 0 <= c["soil_moisture_surface"] <= 1 and c["rain_24h"] >= 10 and c["rain_max_1h"] <= c["rain_24h"] + 1e-9
+    assert scored["history"]["recorded_floods"] == 18 and scored["hotspot"]["type"] == "chowk/underpass"
 
 
 # ---- /route -----------------------------------------------------------------------------------------

@@ -40,6 +40,7 @@ export const HotspotSchema = z.object({
   probability: z.number().min(0).max(1).nullable(), // null for LOW_RAIN: never invented
   explanation: z.string(),
   reported_outcome: z.enum(['flooded', 'no_report']).nullable(), // replay only; separate from the prediction
+  type: z.string(), // what kind of place it is, e.g. "chowk/underpass"
 });
 export type Hotspot = z.infer<typeof HotspotSchema>;
 
@@ -49,6 +50,32 @@ export const HotspotsResponseSchema = z.object({
   hotspots: z.array(HotspotSchema),
 });
 export type HotspotsResponse = z.infer<typeof HotspotsResponseSchema>;
+
+export const HotspotDetailSchema = z.object({
+  scenario: ScenarioMetaSchema,
+  hotspot: HotspotSchema,
+  buffer_m: z.number(),
+  terrain: z.object({ elevation_m: z.number(), sink_depth_m: z.number(), slope_deg: z.number(), catchment_cells: z.number() }),
+  // The rain and soil conditions the model saw on that day. null when the hotspot was not scored (LOW RAIN).
+  conditions: z
+    .object({
+      rain_24h: z.number().nullable(),
+      rain_max_1h: z.number().nullable(),
+      rain_max_3h: z.number().nullable(),
+      rain_prev_3d: z.number().nullable(),
+      soil_moisture_surface: z.number().nullable(),
+      rain_season_cumulative: z.number().nullable(),
+    })
+    .nullable(),
+  history: z.object({ recorded_floods: z.number().int(), first_date: z.string().nullable(), last_date: z.string().nullable() }),
+  infrastructure: z.object({
+    flagged: z.boolean(),
+    note: z.string().nullable(),
+    evidence_date: z.string().nullable(),
+    source_url: z.string().nullable(),
+  }),
+});
+export type HotspotDetail = z.infer<typeof HotspotDetailSchema>;
 
 export const PlaceSchema = z.object({
   place_id: z.string(),

@@ -4,6 +4,7 @@ import {
   ErrorBodySchema,
   GeocodeSchema,
   HealthSchema,
+  HotspotDetailSchema,
   HotspotsResponseSchema,
   NarrateResponseSchema,
   PlacesSearchSchema,
@@ -83,6 +84,13 @@ export const getHotspots = (mode: Mode, date?: string | null) =>
   request(
     `/hotspots?mode=${mode}${mode === 'replay' && date ? `&date=${encodeURIComponent(date)}` : ''}`,
     HotspotsResponseSchema,
+    { timeoutMs: 90_000 },
+  );
+
+export const getHotspotDetail = (id: string, mode: Mode, date?: string | null) =>
+  request(
+    `/hotspots/${encodeURIComponent(id)}?mode=${mode}${mode === 'replay' && date ? `&date=${encodeURIComponent(date)}` : ''}`,
+    HotspotDetailSchema,
     { timeoutMs: 90_000 },
   );
 

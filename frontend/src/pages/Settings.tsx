@@ -21,7 +21,7 @@ export function Settings() {
           : 'This browser is blocking storage, so your settings only last until you close this tab.'}
       </p>
 
-      <div className="rr-text-grid">
+      <div className="rr-text-grid rr-settings-grid">
       <section className="rr-card" aria-labelledby="s-you">
         <h2 id="s-you">You</h2>
         <div className="rr-field">
@@ -44,7 +44,7 @@ export function Settings() {
         <PreferenceFields value={profile} onChange={(patch) => store.update(patch)} />
       </section>
 
-      <section className="rr-card" aria-labelledby="s-data">
+      <section className="rr-card rr-span-all" aria-labelledby="s-data">
         <h2 id="s-data">Your data</h2>
         {profile.recentTrips.length > 0 && (
           <p className="rr-muted">{profile.recentTrips.length} recent trip{profile.recentTrips.length === 1 ? '' : 's'} saved on this device.</p>

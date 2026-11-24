@@ -7,6 +7,7 @@ app.api includes this router).
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 import threading
 import time
 import uuid
@@ -76,14 +77,19 @@ def llm_available() -> bool:
 def _item(h, reported=None):
     return {"id": h["hotspot_id"], "name": h["name"], "lat": float(h["lat"]), "lon": float(h["lon"]),
             "tier": h["tier"], "probability": h["probability"], "explanation": h["explanation"],
-            "reported_outcome": reported}
+            "reported_outcome": reported, "type": h.get("type", "")}
+
+
+def _types():
+    return {h["hotspot_id"]: str(h.get("type") or "") for h in _all_hotspots()}
 
 
 def load_scenario(mode, date_iso):
     """Returns (scenario meta, list of 12 hotspot items). Raises HTTPException for bad input."""
+    types = _types()
     if mode == "live":
         rows, generated = _live_data()
-        items = [_item(h) for h in sorted(rows, key=lambda r: r["hotspot_id"])]
+        items = [_item({**h, "type": types.get(h["hotspot_id"], "")}) for h in sorted(rows, key=lambda r: r["hotspot_id"])]
         return {"mode": "live", "date": None, "forecast_generated_at": generated}, items
 
     if not date_iso:
@@ -98,9 +104,10 @@ def load_scenario(mode, date_iso):
         if row is None:
             items.append({"id": hs["hotspot_id"], "name": hs["name"], "lat": float(hs["lat"]),
                           "lon": float(hs["lon"]), "tier": "LOW_RAIN", "probability": None,
-                          "explanation": f"{hs['name']}: {LOW_RAIN_TEXT}", "reported_outcome": None})
+                          "explanation": f"{hs['name']}: {LOW_RAIN_TEXT}", "reported_outcome": None,
+                          "type": types.get(hs["hotspot_id"], "")})
         else:  # the real outcome sits in its own field and is never part of the prediction
-            items.append(_item(row, "flooded" if row["flooded"] else "no_report"))
+            items.append(_item({**row, "type": types.get(hs["hotspot_id"], "")}, "flooded" if row["flooded"] else "no_report"))
     return {"mode": "replay", "date": date_iso, "forecast_generated_at": None}, items
 
 
@@ -138,6 +145,70 @@ def hotspots(mode: Literal["live", "replay"] = "live",
         raise HTTPException(502, "Hotspot scores could not be refreshed. Please try again shortly.") from exc
     counts = {t: sum(i["tier"] == t for i in items) for t in ("RED", "YELLOW", "GREEN", "LOW_RAIN")}
     return {"scenario": meta, "tiers": counts, "hotspots": items}
+
+
+# ---- /hotspots/{id}: the detail page -----------------------------------------------------------
+
+@lru_cache(maxsize=1)
+def _static_facts():
+    """Per-hotspot facts that do not depend on the day: terrain, number of recorded floods, infrastructure note."""
+    import pandas as pd
+    from config import PROCESSED_DIR, RAW_DIR
+    terrain = pd.read_csv(os.path.join(PROCESSED_DIR, "terrain_features.csv")).set_index("hotspot_id")
+    labels = pd.read_csv(os.path.join(PROCESSED_DIR, "flood_labels_clean.csv"), parse_dates=["date"])
+    infra = pd.read_csv(os.path.join(RAW_DIR, "infrastructure_issues.csv"), keep_default_na=False).set_index("hotspot_id")
+    out = {}
+    for hid in terrain.index:
+        t = terrain.loc[hid]
+        mine = labels[labels["hotspot_id"] == hid]
+        i = infra.loc[hid] if hid in infra.index else None
+        out[hid] = {
+            "terrain": {"elevation_m": float(t["elevation_m"]), "sink_depth_m": float(t["sink_depth_m"]),
+                        "slope_deg": float(t["slope_deg"]), "catchment_cells": int(t["catchment_cells"])},
+            "history": {"recorded_floods": int(len(mine)),
+                        "first_date": mine["date"].min().date().isoformat() if len(mine) else None,
+                        "last_date": mine["date"].max().date().isoformat() if len(mine) else None},
+            "infrastructure": {"flagged": bool(int(i["has_infrastructure_issue"])) if i is not None else False,
+                               "note": (str(i["evidence_note"]) or None) if i is not None else None,
+                               "evidence_date": (str(i["evidence_date"]) or None) if i is not None else None,
+                               "source_url": (str(i["source_url"]) or None) if i is not None else None},
+        }
+    return out
+
+
+CONDITION_KEYS = ("rain_24h", "rain_max_1h", "rain_max_3h", "rain_prev_3d", "soil_moisture_surface", "rain_season_cumulative")
+
+
+def _scenario_row(mode, date_iso, hotspot_id):
+    """The raw scored row (with the model's input features) for one hotspot, or None when it was not scored."""
+    if mode == "live":
+        rows, _ = _live_data()
+    else:
+        scenario = _replay_scenario(date_iso)
+        rows = scenario["hotspots"] if scenario else []
+    return next((r for r in rows if r["hotspot_id"] == hotspot_id), None)
+
+
+@router.get("/hotspots/{hotspot_id}")
+def hotspot_detail(hotspot_id: str, mode: Literal["live", "replay"] = "live",
+                   date: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    """Everything the detail page shows: the same item as /hotspots, plus its buffer radius, terrain, the rain
+    conditions the model saw that day, how many floods were recorded here, and any infrastructure issue."""
+    try:
+        meta, items = load_scenario(mode, date)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, "Hotspot details could not be loaded. Please try again shortly.") from exc
+    item = next((i for i in items if i["id"] == hotspot_id), None)
+    facts = _static_facts().get(hotspot_id)
+    if item is None or facts is None:
+        raise HTTPException(404, "No hotspot with that id.")
+    row = _scenario_row(mode, date, hotspot_id)
+    features = (row or {}).get("features") or {}
+    conditions = {k: (float(features[k]) if features.get(k) is not None else None) for k in CONDITION_KEYS} if features else None
+    buffer_m = route_planner.RED_BUFFER_M if item["tier"] == "RED" else route_planner.YELLOW_BUFFER_M
+    return {"scenario": meta, "hotspot": item, "buffer_m": buffer_m, "conditions": conditions, **facts}
 
 
 # ---- places ----------------------------------------------------------------------------------

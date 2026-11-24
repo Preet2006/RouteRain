@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { HealthSchema, HotspotsResponseSchema, NarrateResponseSchema, RouteResponseSchema } from './schemas';
+import { HealthSchema, HotspotDetailSchema, HotspotsResponseSchema, NarrateResponseSchema, RouteResponseSchema } from './schemas';
 
 // Payloads copied from real /api/v2 responses (W1/W2 runs). `npm run check:contract` re-checks them live.
 const leg = {
@@ -22,9 +22,9 @@ describe('schemas accept real backend payloads', () => {
       tiers: { RED: 0, YELLOW: 8, GREEN: 3, LOW_RAIN: 1 },
       hotspots: [
         { id: 'H01', name: 'Bilaspur Chowk', lat: 28.28, lon: 76.86, tier: 'LOW_RAIN', probability: null,
-          explanation: 'LOW RAIN: not scored.', reported_outcome: null },
+          explanation: 'LOW RAIN: not scored.', reported_outcome: null, type: 'chowk/highway' },
         { id: 'H02', name: 'Rajiv Chowk', lat: 28.44, lon: 77.03, tier: 'YELLOW', probability: 0.18,
-          explanation: 'Rajiv Chowk - YELLOW', reported_outcome: 'flooded' },
+          explanation: 'Rajiv Chowk - YELLOW', reported_outcome: 'flooded', type: 'chowk/underpass' },
       ],
     });
     expect(r.success).toBe(true);
@@ -51,13 +51,38 @@ describe('schemas accept real backend payloads', () => {
   });
 });
 
+describe('hotspot detail schema', () => {
+  const base = {
+    scenario: { mode: 'replay', date: '2025-07-09', forecast_generated_at: null },
+    hotspot: { id: 'H01', name: 'Bilaspur Chowk', lat: 28.28, lon: 76.86, tier: 'LOW_RAIN', probability: null, explanation: 'x', reported_outcome: null, type: 'chowk/highway' },
+    buffer_m: 300,
+    terrain: { elevation_m: 243, sink_depth_m: 0.05, slope_deg: 4.3, catchment_cells: 495 },
+    conditions: null,
+    history: { recorded_floods: 7, first_date: '2022-09-22', last_date: '2026-07-07' },
+    infrastructure: { flagged: true, note: 'Choked drain', evidence_date: '2025-12-04', source_url: 'https://example.org/x' },
+  };
+  it('accepts a LOW RAIN detail (null conditions) and a scored one', () => {
+    expect(HotspotDetailSchema.safeParse(base).success).toBe(true);
+    const scored = { ...base, conditions: { rain_24h: 48, rain_max_1h: 21, rain_max_3h: 33, rain_prev_3d: 8, soil_moisture_surface: 0.4, rain_season_cumulative: 600 } };
+    expect(HotspotDetailSchema.safeParse(scored).success).toBe(true);
+  });
+  it('accepts no infrastructure source and no flood dates', () => {
+    expect(HotspotDetailSchema.safeParse({ ...base, history: { recorded_floods: 0, first_date: null, last_date: null }, infrastructure: { flagged: false, note: null, evidence_date: null, source_url: null } }).success).toBe(true);
+  });
+  it('rejects a missing terrain block or a non-integer flood count', () => {
+    const { terrain: _t, ...noTerrain } = base;
+    expect(HotspotDetailSchema.safeParse(noTerrain).success).toBe(false);
+    expect(HotspotDetailSchema.safeParse({ ...base, history: { ...base.history, recorded_floods: 2.5 } }).success).toBe(false);
+  });
+});
+
 describe('schemas reject bad payloads', () => {
   it('unknown tier, probability out of range, polyline over 300 points', () => {
     const base = {
       scenario: { mode: 'live', date: null, forecast_generated_at: null },
       tiers: { RED: 0, YELLOW: 0, GREEN: 1, LOW_RAIN: 0 },
     };
-    const item = { id: 'H01', name: 'x', lat: 1, lon: 1, tier: 'GREEN', probability: 0.1, explanation: '', reported_outcome: null };
+    const item = { id: 'H01', name: 'x', lat: 1, lon: 1, tier: 'GREEN', probability: 0.1, explanation: '', reported_outcome: null, type: '' };
     expect(HotspotsResponseSchema.safeParse({ ...base, hotspots: [{ ...item, tier: 'PURPLE' }] }).success).toBe(false);
     expect(HotspotsResponseSchema.safeParse({ ...base, hotspots: [{ ...item, probability: 1.5 }] }).success).toBe(false);
     const big = { ...leg, polyline: Array.from({ length: 301 }, () => [1, 1]) };

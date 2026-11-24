@@ -20,12 +20,12 @@ function Show() {
   const { scenario } = useScenario();
   return <div data-testid="scenario">{scenario.mode === 'live' ? 'live' : scenario.date}</div>;
 }
-function renderShell(path = '/plan') {
+function renderShell(path = '/plan', initial?: import('@/lib/scenario').ScenarioChoice) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
-        <ScenarioProvider>
+        <ScenarioProvider initial={initial}>
           <Routes>
             <Route element={<Shell />}>
               <Route path="/plan" element={<div>plan page <Show /></div>} />
@@ -92,15 +92,35 @@ describe('Live / Replay selector in the top bar', () => {
     await userEvent.selectOptions(select, '2026-07-08');
     expect(screen.getByTestId('scenario').textContent).toBe('2026-07-08');
     expect(select.className).toBe('replay');
-    expect(JSON.parse(window.sessionStorage.getItem('routerain.scenario')!)).toEqual({ mode: 'replay', date: '2026-07-08' });
     await userEvent.selectOptions(select, 'live');
     expect(screen.getByTestId('scenario').textContent).toBe('live');
     expect(select.className).toBe('');
   });
 
-  it('shows a remembered replay day even before the list has loaded', () => {
+  it('starts on Live every time: nothing is remembered between visits', async () => {
     window.sessionStorage.setItem('routerain.scenario', JSON.stringify({ mode: 'replay', date: '2026-08-07' }));
+    window.localStorage.setItem('routerain.scenario', JSON.stringify({ mode: 'replay', date: '2026-08-07' }));
     renderShell();
+    expect((screen.getByLabelText('Weather to show') as HTMLSelectElement).value).toBe('live');
+    expect(screen.getByTestId('scenario').textContent).toBe('live');
+  });
+
+  it('a replay can be asked for in the address (?replay=date), for demo links', () => {
+    window.history.pushState({}, '', '/plan?replay=2026-08-07');
+    renderShell();
+    expect((screen.getByLabelText('Weather to show') as HTMLSelectElement).value).toBe('2026-08-07');
+    window.history.pushState({}, '', '/');
+  });
+
+  it('ignores a malformed replay date in the address', () => {
+    window.history.pushState({}, '', '/plan?replay=yesterday');
+    renderShell();
+    expect(screen.getByTestId('scenario').textContent).toBe('live');
+    window.history.pushState({}, '', '/');
+  });
+
+  it('shows a replay day even before the list of days has loaded', () => {
+    renderShell('/plan', { mode: 'replay', date: '2026-08-07' });
     expect((screen.getByLabelText('Weather to show') as HTMLSelectElement).value).toBe('2026-08-07');
   });
 });

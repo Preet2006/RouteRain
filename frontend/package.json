@@ -11,7 +11,8 @@
     "test": "vitest run",
     "check:contract": "node --experimental-strip-types --no-warnings scripts/check-contract.mjs",
     "check:markers": "node --experimental-strip-types --no-warnings scripts/check-markers.mjs",
-    "check:browser": "node scripts/browser-check.mjs"
+    "check:browser": "node scripts/browser-check.mjs",
+    "check:cards": "node --experimental-strip-types --no-warnings scripts/check-cards.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.108.2",

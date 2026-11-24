@@ -1,15 +1,17 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import { ApiError, createRoute } from '@/api/client';
+import { ApiError, createRoute, getHotspots } from '@/api/client';
 import { PlaceField } from '@/components/PlaceField';
+import { WeatherChooser } from '@/components/WeatherChooser';
+import { atRiskCount } from '@/features/hotspots/model';
 import { PickMap, type PickTarget } from '@/features/plan/PickMap';
+import { replayDateLabel } from '@/lib/dates';
 import { pinnedLabel } from '@/lib/geolocation';
 import { useScenario } from '@/lib/scenario';
 import type { SavedPlace } from '@/lib/storage';
 import { useProfile } from '@/lib/useProfile';
-
-import { replayDateLabel } from './Home';
 
 const same = (a: SavedPlace | null, b: SavedPlace | null) => !!a && !!b && a.lat === b.lat && a.lon === b.lon;
 
@@ -37,6 +39,15 @@ export function Plan() {
   const [to, setTo] = useState<SavedPlace | null>((location.state as { destination?: SavedPlace } | null)?.destination ?? null);
   const [picking, setPicking] = useState<PickTarget>(null);
   const [busy, setBusy] = useState(false);
+  const [showHotspots, setShowHotspots] = useState(true);
+  const hotspotQuery = useQuery({
+    queryKey: ['hotspots', scenario.mode, scenario.date],
+    queryFn: () => getHotspots(scenario.mode, scenario.date),
+    staleTime: scenario.mode === 'live' ? 10 * 60_000 : Infinity,
+  });
+  const hotspots = hotspotQuery.data?.hotspots ?? [];
+  const atRisk = atRiskCount(hotspots);
+  const when = scenario.mode === 'live' ? 'today' : `on ${replayDateLabel(scenario.date)}`;
   const [error, setError] = useState('');
   const quick = useMemo(() => quickPlaces(profile), [profile]);
 
@@ -90,16 +101,21 @@ export function Plan() {
     <div className="rr-plan">
       <form onSubmit={submit} className="rr-plan-form" aria-label="Plan a trip" noValidate>
         <h1>Plan a trip</h1>
-        <p className={scenario.mode === 'replay' ? 'rr-banner' : 'rr-muted'} role="status">
-          {scenario.mode === 'replay' ? (
-            <>
-              <b>Replay: {replayDateLabel(scenario.date)} weather.</b> This route is planned for that past day, not today.
-            </>
-          ) : (
-            'Using today’s live forecast.'
-          )}{' '}
-          <Link to="/">Change</Link>
-        </p>
+        <WeatherChooser />
+
+        <div className="rr-hotspot-line">
+          <label className="rr-check">
+            <input type="checkbox" checked={showHotspots} onChange={(e) => setShowHotspots(e.target.checked)} />
+            Show hotspots
+          </label>
+          {hotspotQuery.data && (
+            <p className="rr-muted">
+              {atRisk === 0 ? `No hotspots at risk ${when}` : `${atRisk} hotspot${atRisk === 1 ? '' : 's'} at risk ${when}`}
+              {' · '}
+              <Link to="/hotspots">View all</Link>
+            </p>
+          )}
+        </div>
 
         <PlaceField
           label="From"
@@ -147,7 +163,7 @@ export function Plan() {
         {(!from || !to) && <p className="rr-muted">Choose both a pickup and a drop to continue.</p>}
       </form>
 
-      <PickMap from={from} to={to} picking={picking} onPick={pick} />
+      <PickMap from={from} to={to} picking={picking} onPick={pick} hotspots={showHotspots ? hotspots : []} />
     </div>
   );
 }

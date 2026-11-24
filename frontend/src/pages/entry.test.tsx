@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -29,14 +29,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('entry screen', () => {
-  it('shows the big app name in the centre, the tagline, an Enter button and the footer', () => {
+  it('shows the big app name in the centre, the tagline, three short points and an Enter button', () => {
     renderEntry();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('RouteRain');
     expect(screen.getByText('Know before you go: flood-aware routes for Gurugram')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Enter' })).toBeTruthy();
-    expect(screen.getByText('Group 6 · MDI Gurgaon')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /a guide, not a guarantee/i }).getAttribute('href')).toBe('/about');
     expect(screen.getByRole('main', { name: 'RouteRain' })).toBeTruthy();
+    const points = within(screen.getByRole('list', { name: /what routerain does/i })).getAllByRole('listitem');
+    expect(points.map((p) => p.textContent)).toEqual(['12 monitored hotspots', 'Risk explained in plain words', 'Flood-aware route advice']);
+  });
+
+  it('has no footer: no group or institute line and no caveat link', () => {
+    const { container } = renderEntry();
+    expect(container.querySelector('footer')).toBeNull();
+    expect(container.textContent).not.toMatch(/group 6|mdi|guarantee/i);
+    expect(screen.queryByRole('link')).toBeNull();
   });
 
   it('first-time visitors go to setup', async () => {

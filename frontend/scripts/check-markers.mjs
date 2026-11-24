@@ -2,7 +2,7 @@
 // every one of the 12 hotspots gets exactly one map marker whose text, colour and accessible name match the API.
 // Usage:  npm run check:markers -- http://127.0.0.1:8000 [replayDate replayDate]
 import { HotspotsResponseSchema } from '../src/api/schemas.ts';
-import { markerSpec, probabilityBand } from '../src/features/home/markers.ts';
+import { markerSpec, probabilityBand } from '../src/features/hotspots/markers.ts';
 import { tierInfo } from '../src/theme/tiers.ts';
 
 const args = process.argv.slice(2);
