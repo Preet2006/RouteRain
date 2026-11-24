@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { Logo } from '@/components/Splash';
+import { Logo } from '@/components/Logo';
 import { useProfile } from '@/lib/useProfile';
 
 /** Shown right after setup: "Welcome, <name>", what was saved, and one button into the app. */
 export function Ready() {
   const { profile } = useProfile();
   const navigate = useNavigate();
-  const enter = () => navigate('/', { replace: true });
+  const enter = () => navigate('/plan', { replace: true });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -18,7 +18,7 @@ export function Ready() {
     return () => window.removeEventListener('keydown', onKey);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!profile.onboarded) return <Navigate to="/welcome" replace />;
+  if (!profile.onboarded) return <Navigate to="/setup" replace />;
   const name = profile.name.trim();
   const saved = [
     profile.home ? `Home: ${profile.home.label}` : null,

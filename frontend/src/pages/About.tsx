@@ -7,10 +7,11 @@ export function About() {
   const { data } = useQuery({ queryKey: ['health'], queryFn: getHealth });
   const delay = data ? data.flood_delay_min.toFixed(1) : '23.4';
   return (
-    <>
+    <div className="rr-text">
       <h1>About RouteRain</h1>
       <p><b>A guide, not a guarantee.</b> RouteRain is a research project. Use your own judgement in heavy rain.</p>
 
+      <div className="rr-text-grid">
       <section className="rr-card" aria-labelledby="a-what">
         <h2 id="a-what">What it does</h2>
         <p>
@@ -65,6 +66,7 @@ export function About() {
           with its date. The “reported that day” line shows what was recorded, separately from the prediction, so you can see where the model was right and where it missed.
         </p>
       </section>
-    </>
+      </div>
+    </div>
   );
 }

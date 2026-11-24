@@ -1,13 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { ApiError, getHotspots } from '@/api/client';
 import { HotspotDetails } from '@/features/home/HotspotDetails';
 import { HotspotMap } from '@/features/home/HotspotMap';
 import { probabilityBand, sortHotspots } from '@/features/home/markers';
-import { ScenarioPicker } from '@/features/home/ScenarioPicker';
-import { greeting, type SavedPlace } from '@/lib/storage';
+import type { SavedPlace } from '@/lib/storage';
 import { useScenario } from '@/lib/scenario';
 import { useProfile } from '@/lib/useProfile';
 import { TIER_ORDER, tierInfo } from '@/theme';
@@ -26,10 +25,7 @@ export function Home() {
     queryKey: ['hotspots', scenario.mode, scenario.date],
     queryFn: () => getHotspots(scenario.mode, scenario.date),
     staleTime: scenario.mode === 'live' ? 10 * 60_000 : Infinity,
-    enabled: profile.onboarded,
   });
-
-  if (!profile.onboarded) return <Navigate to="/welcome" replace />;
 
   const hotspots = data?.hotspots ?? [];
   const selected = hotspots.find((h) => h.id === selectedId) ?? null;
@@ -45,7 +41,7 @@ export function Home() {
   return (
     <div className="rr-home">
       <section className="rr-home-panel" aria-label="Overview">
-        <h1>{greeting(profile.name)}</h1>
+        <h1>Hotspots</h1>
 
         <button type="button" className="rr-where" onClick={() => navigate('/plan')}>
           Where are you going?
@@ -58,8 +54,6 @@ export function Home() {
             ))}
           </div>
         )}
-
-        <ScenarioPicker />
 
         {replay && (
           <p className="rr-banner" role="status">

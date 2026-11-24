@@ -32,6 +32,7 @@ vi.mock('@/api/client', () => ({
   }),
 }));
 vi.mock('@/features/home/HotspotMap', () => ({ HotspotMap: () => null }));
+vi.mock('@/features/plan/PickMap', () => ({ PickMap: () => null }));
 
 vi.mock('@/lib/speech', () => ({
   speech: {
@@ -78,15 +79,18 @@ afterEach(() => {
 });
 
 describe('first visit', () => {
-  it('a fresh browser lands on the welcome page', async () => {
-    renderAt('/');
-    expect(await screen.findByRole('heading', { name: /know before you go/i })).toBeTruthy();
-  });
-
-  it('after setup, a reload goes straight to Home with the greeting', async () => {
+  it('a fresh browser sees the entry screen first, and Enter leads to setup', async () => {
     const user = userEvent.setup();
     renderAt('/');
-    await user.click(await screen.findByRole('link', { name: /get started/i }));
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('RouteRain');
+    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    expect(await screen.findByText(/step 1 of 3/i)).toBeTruthy();
+  });
+
+  it('after setup: Welcome screen, then trip planning; a returning visitor goes entry -> plan', async () => {
+    const user = userEvent.setup();
+    renderAt('/');
+    await user.click(await screen.findByRole('button', { name: 'Enter' }));
 
     expect(await screen.findByText(/step 1 of 3/i)).toBeTruthy();
     await user.type(screen.getByLabelText(/what.s your name/i), 'Tanish');
@@ -110,31 +114,32 @@ describe('first visit', () => {
     expect(summary).toMatch(/Caution: Balanced/);
     await user.click(screen.getByRole('button', { name: /enter routerain/i }));
 
-    expect(await screen.findByRole('heading', { name: /good (morning|afternoon|evening), tanish/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Plan a trip' })).toBeTruthy();
+    expect(screen.getByRole('banner').textContent).toMatch(/Good (morning|afternoon|evening), Tanish/);
     const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
     expect(saved).toMatchObject({ name: 'Tanish', onboarded: true, caution: 'balanced', home: { label: 'Cyber Hub' } });
 
-    // "reload": fresh React tree, profile re-read from storage
+    // "reload": fresh React tree, profile re-read from storage; the entry screen sends a returning visitor to Plan
     cleanup();
     profileStore.reload();
     renderAt('/');
-    expect(await screen.findByRole('heading', { name: /good (morning|afternoon|evening), tanish/i })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: /know before you go/i })).toBeNull();
+    expect(await screen.findByText('Welcome back, Tanish')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    expect(await screen.findByRole('heading', { name: 'Plan a trip' })).toBeTruthy();
   });
 
-  it('Skip setup goes to Home with defaults and keeps nothing else', async () => {
+  it('Skip setup goes to Plan with defaults and keeps nothing else', async () => {
     const user = userEvent.setup();
     renderAt('/setup');
     await user.type(screen.getByLabelText(/what.s your name/i), 'Ignored');
     await user.click(screen.getByRole('button', { name: /skip setup/i }));
-    expect(await screen.findByRole('heading', { name: /^good (morning|afternoon|evening)$/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Plan a trip' })).toBeTruthy();
     expect(profileStore.get()).toMatchObject({ onboarded: true, name: '' });
   });
 
-  it('an onboarded visitor opening /welcome is sent to Home', async () => {
-    profileStore.update({ onboarded: true });
+  it('/welcome is gone: it now leads to setup', async () => {
     renderAt('/welcome');
-    expect(await screen.findByRole('heading', { name: /good (morning|afternoon|evening)/i })).toBeTruthy();
+    expect(await screen.findByText(/step 1 of 3/i)).toBeTruthy();
   });
 
   it('Back keeps what was typed', async () => {
@@ -168,7 +173,7 @@ describe('settings', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy();
     expect(profileStore.get().onboarded).toBe(true); // nothing cleared yet
     await user.click(screen.getByRole('button', { name: /yes, clear everything/i }));
-    expect(await screen.findByRole('heading', { name: /know before you go/i })).toBeTruthy();
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('RouteRain'); // back at the entry screen
     expect(profileStore.get()).toMatchObject({ onboarded: false, name: '' });
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
@@ -283,7 +288,7 @@ describe('about', () => {
 
 
 describe('welcome screen after setup', () => {
-  it('says just "Welcome" when no name was given, and Enter continues to Home', async () => {
+  it('says just "Welcome" when no name was given, and Enter continues to Plan', async () => {
     const user = userEvent.setup();
     renderAt('/setup');
     await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -291,11 +296,12 @@ describe('welcome screen after setup', () => {
     await user.click(screen.getByRole('button', { name: 'Finish' }));
     expect((await screen.findByTestId('welcome-name')).textContent).toBe('Welcome');
     await user.keyboard('{Enter}');
-    expect(await screen.findByRole('heading', { name: /^good (morning|afternoon|evening)$/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Plan a trip' })).toBeTruthy();
   });
 
   it('is only for people who finished setup', async () => {
     renderAt('/ready');
-    expect(await screen.findByRole('heading', { name: /know before you go/i })).toBeTruthy();
+    expect(await screen.findByText(/step 1 of 3/i)).toBeTruthy();
   });
 });
+

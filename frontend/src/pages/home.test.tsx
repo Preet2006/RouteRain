@@ -48,6 +48,11 @@ const REPLAY = response(
   { mode: 'replay', date: '2026-08-07', forecast_generated_at: null },
 );
 
+/** The Live/Replay choice lives in the top bar (see shell.test.tsx); here we just preset the shared scenario. */
+function replayDay(date = '2026-08-07') {
+  window.sessionStorage.setItem('routerain.scenario', JSON.stringify({ mode: 'replay', date }));
+}
+
 function LocationProbe() {
   const l = useLocation();
   return <div data-testid="loc" data-path={l.pathname} data-state={JSON.stringify(l.state)} />;
@@ -85,9 +90,9 @@ afterEach(() => {
 });
 
 describe('Home: live', () => {
-  it('greets, shows the forecast time, 12 hotspots and the no-rain note when everything is GREEN', async () => {
+  it('shows the page title, the forecast time, 12 hotspots and the no-rain note when everything is GREEN', async () => {
     renderHome();
-    expect(await screen.findByRole('heading', { name: /good (morning|afternoon|evening), tanish/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Hotspots', level: 1 })).toBeTruthy();
     expect(await screen.findByText(/forecast updated/i)).toBeTruthy();
     expect(screen.getByTestId('map').dataset.count).toBe('12');
     expect(screen.getByText(/no rain is forecast, so every hotspot is green/i)).toBeTruthy();
@@ -128,12 +133,9 @@ describe('Home: live', () => {
 });
 
 describe('Home: replay', () => {
-  it('switching to replay shows the dated banner, LOW RAIN count and reports hotspots for that date', async () => {
-    const user = userEvent.setup();
+  it('a replay day shows the dated banner, LOW RAIN count and scores that date', async () => {
+    replayDay();
     renderHome();
-    await screen.findByText(/forecast updated/i);
-    await user.click(screen.getByRole('radio', { name: /replay a past monsoon day/i }));
-
     const banner = await screen.findByText(/replay: 7 august 2026 weather/i);
     expect(banner.closest('[role=status]')?.textContent).toMatch(/not today.s forecast/i);
     expect(api.getHotspots).toHaveBeenLastCalledWith('replay', '2026-08-07');
@@ -141,24 +143,19 @@ describe('Home: replay', () => {
     const counts = screen.getByRole('list', { name: /hotspots by risk/i });
     expect(within(counts).getByText(/low rain/i)).toBeTruthy();
     expect(screen.queryByText(/no rain is forecast/i)).toBeNull();
-    expect(JSON.parse(window.sessionStorage.getItem('routerain.scenario')!)).toEqual({ mode: 'replay', date: '2026-08-07' });
   });
 
-  it('choosing another day re-queries and keeps the choice', async () => {
-    const user = userEvent.setup();
+  it('another replay day queries that day', async () => {
+    replayDay('2026-07-08');
     renderHome();
-    await user.click(await screen.findByRole('radio', { name: /replay a past monsoon day/i }));
-    await user.selectOptions(await screen.findByLabelText('Day'), '2026-07-08');
     await waitFor(() => expect(api.getHotspots).toHaveBeenLastCalledWith('replay', '2026-07-08'));
     expect(await screen.findByText(/replay: 8 july 2026 weather/i)).toBeTruthy();
-    await user.click(screen.getByRole('radio', { name: /live forecast/i }));
-    expect(screen.queryByText(/replay: /i)).toBeNull();
   });
 
   it('lists RED first, and selecting a hotspot shows its details with the reported outcome kept separate', async () => {
     const user = userEvent.setup();
+    replayDay();
     renderHome();
-    await user.click(await screen.findByRole('radio', { name: /replay a past monsoon day/i }));
     await screen.findByText(/replay of 7 august 2026/i);
 
     const rows = screen.getAllByRole('button', { name: /spot \d+/i }).map((b) => b.textContent!);
@@ -183,8 +180,8 @@ describe('Home: replay', () => {
 
   it('a LOW RAIN hotspot says it is not scored and never shows a probability', async () => {
     const user = userEvent.setup();
+    replayDay();
     renderHome();
-    await user.click(await screen.findByRole('radio', { name: /replay a past monsoon day/i }));
     await screen.findByText(/replay of 7 august 2026/i);
     await user.click(screen.getByRole('button', { name: /spot 4/i }));
     const details = screen.getByRole('region', { name: /spot 4 details/i });
@@ -217,10 +214,10 @@ describe('Home: navigation', () => {
     expect(JSON.parse(screen.getByTestId('loc').dataset.state!)).toEqual({ destination: work });
   });
 
-  it('sends a visitor who has not done setup to the welcome page', async () => {
+  it('is open to a visitor who has not done setup (the entry screen decides where they go first)', async () => {
     profileStore.clear();
     renderHome();
-    await waitFor(() => expect(screen.getByTestId('loc').dataset.path).toBe('/welcome'));
-    expect(api.getHotspots).not.toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { name: 'Hotspots', level: 1 })).toBeTruthy();
+    expect(api.getHotspots).toHaveBeenCalled();
   });
 });

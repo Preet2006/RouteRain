@@ -35,7 +35,7 @@ type Props = { from: SavedPlace | null; to: SavedPlace | null; picking: PickTarg
 export function PickMap({ from, to, picking, onPick }: Props) {
   return (
     <div className={`rr-map rr-plan-map${picking ? ' picking' : ''}`} data-testid="pick-map">
-      <MapContainer center={GURUGRAM_CENTER} zoom={11} scrollWheelZoom className="rr-map-inner" aria-label="Map for choosing pickup and drop points">
+      <MapContainer center={GURUGRAM_CENTER} zoom={12} scrollWheelZoom className="rr-map-inner" aria-label="Map for choosing pickup and drop points">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

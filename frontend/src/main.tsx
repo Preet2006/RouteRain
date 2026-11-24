@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
 import { App } from './App';
-import { SplashGate } from './components/Splash';
 import { ScenarioProvider } from './lib/scenario';
 import './styles/base.css';
 
@@ -17,9 +16,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ScenarioProvider>
-          <SplashGate>
-            <App />
-          </SplashGate>
+          <App />
         </ScenarioProvider>
       </BrowserRouter>
     </QueryClientProvider>

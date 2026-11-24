@@ -25,7 +25,7 @@ export function Setup() {
   }
   function skip() {
     store.update({ onboarded: true }); // keep the defaults, nothing else is saved
-    navigate('/', { replace: true });
+    navigate('/plan', { replace: true });
   }
 
   return (

@@ -13,7 +13,7 @@ export function Settings() {
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <>
+    <div className="rr-text">
       <h1>Settings</h1>
       <p className={persistent ? 'rr-muted' : 'rr-note'} role={persistent ? undefined : 'status'}>
         {persistent
@@ -21,6 +21,7 @@ export function Settings() {
           : 'This browser is blocking storage, so your settings only last until you close this tab.'}
       </p>
 
+      <div className="rr-text-grid">
       <section className="rr-card" aria-labelledby="s-you">
         <h2 id="s-you">You</h2>
         <div className="rr-field">
@@ -58,7 +59,7 @@ export function Settings() {
                 className="rr-btn danger"
                 onClick={() => {
                   store.clear();
-                  navigate('/welcome', { replace: true });
+                  navigate('/', { replace: true }); // back to the entry screen
                 }}>
                 Yes, clear everything
               </button>
@@ -67,6 +68,8 @@ export function Settings() {
           </div>
         )}
       </section>
-    </>
+      </div>
+      <p className="rr-caveat-line">A guide, not a guarantee.</p>
+    </div>
   );
 }

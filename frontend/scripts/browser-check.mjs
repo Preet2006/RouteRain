@@ -71,6 +71,21 @@ async function audit(page, name, width) {
   if (horizontal) problems.push(`[overflow] ${name} @${width}: page is ${overflow.scrollW}px wide in a ${overflow.innerW}px window (${overflow.offenders.join(', ')})`);
 }
 
+
+// Full-screen check: no boxed container, map pages fill the window without page scroll, the map is most of the width.
+const layoutRows = [];
+async function layout(page, name, kind, w, h) {
+  const m = await page.evaluate(() => {
+    const r = (s) => { const e = document.querySelector(s); if (!e) return null; const q = e.getBoundingClientRect(); return { left: Math.round(q.left), width: Math.round(q.width), height: Math.round(q.height) }; };
+    return { main: r('.rr-main'), map: r('.rr-map'), scrollH: document.documentElement.scrollHeight, innerH: window.innerHeight, scrollW: document.documentElement.scrollWidth, innerW: window.innerWidth };
+  });
+  const row = { page: name, vp: `${w}x${h}`, mainW: m.main ? m.main.width : '-', mainLeft: m.main ? m.main.left : '-', mapW: m.map ? m.map.width : '-', mapPct: m.map ? Math.round(100 * m.map.width / w) : '-', mapH: m.map ? m.map.height : '-', pageScrolls: m.scrollH > m.innerH + 1 };
+  layoutRows.push(row);
+  if (kind !== 'entry' && m.main && (m.main.width < w - 1 || m.main.left !== 0)) problems.push(`[layout] ${name} @${w}: content is boxed (${m.main.width}px wide, left ${m.main.left})`);
+  if (kind === 'map' && m.scrollH > m.innerH + 1) problems.push(`[layout] ${name} @${w}: page scrolls (${m.scrollH}px in a ${m.innerH}px window) instead of filling the screen`);
+  if (kind === 'map' && w >= 1366 && m.map && m.map.width < w * 0.5) problems.push(`[layout] ${name} @${w}: map is only ${Math.round(100 * m.map.width / w)}% of the width`);
+}
+
 async function shoot(page, name, width) {
   await page.screenshot({ path: path.join(outDir, `${name}-${width}.png`), fullPage: false });
 }
@@ -80,28 +95,30 @@ const route = demo ? { route_id: 'demo-trip-1' } : await api('/route', {
   origin: { lat: 28.4951, lon: 77.0891, label: 'Cyber Hub' }, destination: { lat: 28.4395, lon: 77.0422, label: 'Medanta The Medicity' },
   caution: 'cautious', mode: 'replay', date: '2026-08-07' });
 const PAGES = [
-  ['home', '/', 'h1'],
-  ['plan', '/plan', 'form[aria-label="Plan a trip"]'],
-  ['route', `/route/${route.route_id}`, '[data-testid="advice-text"]'],
-  ['settings', '/settings', 'h1'],
-  ['about', '/about', 'h1'],
+  ['entry', '/', '.rr-entry-name', 'entry'],
+  ['plan', '/plan', 'form[aria-label="Plan a trip"]', 'map'],
+  ['hotspots', '/hotspots', '.rr-home-panel h1', 'map'],
+  ['route', `/route/${route.route_id}`, '[data-testid="advice-text"]', 'map'],
+  ['settings', '/settings', '.rr-text h1', 'text'],
+  ['about', '/about', '.rr-text h1', 'text'],
 ];
 
 for (const [w, h] of VIEWPORTS) {
-  for (const [name, url, ready] of PAGES) {
+  for (const [name, url, ready, kind] of PAGES) {
     const page = await open(w, h, { demo });
     try {
       await page.goto(base + url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForSelector(ready, { timeout: 30000 });
-      if (name === 'home') await page.waitForSelector('.rr-marker', { timeout: 60000 }).catch(() => problems.push(`[home] no markers at ${w}`));
+      if (name === 'hotspots') await page.waitForSelector('.rr-marker', { timeout: 60000 }).catch(() => problems.push(`[home] no markers at ${w}`));
       await new Promise((r) => setTimeout(r, 1200)); // let tiles/fly animations settle
       await shoot(page, name, w);
       if (!flag('--no-axe')) await audit(page, name, w);
+      await layout(page, name, kind, w, h);
     } catch (e) { problems.push(`[load] ${name} @${w}: ${e.message}`); }
     await page.close();
   }
   // first-run pages (no profile)
-  for (const [name, url, ready] of [['welcome', '/welcome', 'h1'], ['setup', '/setup', 'h1']]) {
+  for (const [name, url, ready] of [['setup', '/setup', 'h1']]) {
     const page = await open(w, h, { profile: null, replay: false });
     try {
       await page.goto(base + url, { waitUntil: 'domcontentloaded' });
@@ -115,6 +132,8 @@ for (const [w, h] of VIEWPORTS) {
 
 console.log(`Browser: ${executablePath}`);
 console.table(summary);
+console.log('\nLayout (full-screen check):');
+console.table(layoutRows);
 console.log(problems.length ? `\n${problems.length} problem(s):\n- ${[...new Set(problems)].join('\n- ')}` : '\nNo accessibility violations, no horizontal overflow, no console errors.');
 console.log(`Screenshots: ${outDir}`);
 await browser.close();

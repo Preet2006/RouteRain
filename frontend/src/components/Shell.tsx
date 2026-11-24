@@ -1,16 +1,19 @@
 import { useEffect } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 
+import { ScenarioSwitch } from '@/components/ScenarioSwitch';
+import { greeting } from '@/lib/storage';
+import { useProfile } from '@/lib/useProfile';
 import { useStopSpeechOnNavigate } from '@/lib/useStopSpeechOnNavigate';
 
 const NAV = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/plan', label: 'Plan a trip', end: false },
-  { to: '/settings', label: 'Settings', end: false },
-  { to: '/about', label: 'About', end: false },
+  { to: '/plan', label: 'Plan trip' },
+  { to: '/hotspots', label: 'Hotspots' },
+  { to: '/settings', label: 'Settings' },
+  { to: '/about', label: 'About' },
 ];
 
-/** Marks <body> so base.css only styles the new pages (the legacy dashboard has its own styles). */
+/** Marks <body> so base.css styles apply to the app pages. */
 export function useRrBody() {
   useEffect(() => {
     document.body.classList.add('rr');
@@ -18,32 +21,37 @@ export function useRrBody() {
   }, []);
 }
 
+/**
+ * The full-screen app shell: a slim top bar (wordmark, tabs, Live/Replay selector, greeting) on desktop that becomes
+ * a bottom tab bar under 768 px, and a content area that fills everything else. Pages decide how to use the area.
+ */
 export function Shell() {
   useRrBody();
   useStopSpeechOnNavigate();
+  const { profile } = useProfile();
   return (
     <div className="rr-shell">
       <a className="rr-skip" href="#main">Skip to content</a>
       <header className="rr-header">
-        <Link to="/" className="rr-brand">Route<b>Rain</b></Link>
+        <Link to="/" className="rr-brand" aria-label="RouteRain, back to the start screen">Route<b>Rain</b></Link>
         <nav className="rr-nav" aria-label="Main">
           {NAV.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end}>{item.label}</NavLink>
+            <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
           ))}
         </nav>
+        <div className="rr-header-tools">
+          <ScenarioSwitch />
+          <span className="rr-greeting">{greeting(profile.name)}</span>
+        </div>
       </header>
-      <main id="main" className="rr-main" tabIndex={-1}>
+      <main id="main" className="rr-main" tabIndex={0}>
         <Outlet />
       </main>
-      <footer className="rr-footer">
-        <span>A guide, not a guarantee.</span>
-        <span>RouteRain · Gurugram</span>
-      </footer>
     </div>
   );
 }
 
-/** Layout for the first-run pages (welcome, setup): no navigation, just the content. */
+/** Layout for the first-run pages (setup, welcome): no navigation, just the content. */
 export function BareLayout() {
   useRrBody();
   useStopSpeechOnNavigate();
