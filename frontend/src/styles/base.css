@@ -442,7 +442,28 @@ body.rr {
 .rr-hotspot-line p { margin: 0; font-size: 14px; }
 
 /* settings polish: preferences get more room; buttons keep their natural width */
-.rr-settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
+.rr-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .rr-text-grid > .rr-card .rr-btn { align-self: flex-start; }
 .rr-pref-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 @media (max-width: 900px) { .rr-settings-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ================= U3: settings save bar, dialog, toast ================= */
+.rr-settings-page { min-height: 100%; display: flex; flex-direction: column; }
+.rr-settings-page > .rr-text { flex: 1; }
+.rr-savebar {
+  position: sticky; bottom: 0; z-index: 900; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px clamp(16px, 4vw, 72px); background: rgba(11, 17, 24, 0.96); border-top: 1px solid var(--rr-line); backdrop-filter: blur(6px);
+}
+.rr-savebar .rr-actions { margin: 0; }
+.rr-savebar-status { margin: 0 !important; color: var(--rr-muted); }
+.rr-savebar-status.dirty { color: var(--rr-yellow); font-weight: 600; }
+.rr-toast {
+  position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 1400; max-width: min(92vw, 560px);
+  background: #12301f; border: 1px solid #2c6b46; color: #c9f5da; border-radius: 12px; padding: 12px 20px; font-weight: 600; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+.rr-modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(4, 8, 12, 0.7); padding: 16px; }
+.rr-modal { width: min(460px, 100%); background: var(--rr-panel); border: 1px solid var(--rr-line); border-radius: 16px; padding: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.rr-modal h2 { margin: 0 0 8px; }
+.rr-modal .rr-actions { justify-content: flex-start; }
+.rr .rr-field input[aria-invalid='true'] { border-color: var(--rr-red); }
+@media (max-width: 767px) { .rr-toast { bottom: 150px; } }

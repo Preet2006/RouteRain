@@ -15,6 +15,10 @@ type Props = {
   /** Show a "Pick on map" toggle; the parent owns the map. */
   onTogglePick?: () => void;
   picking?: boolean;
+  /** Called with true while text has been typed but no place has been chosen (so the form can refuse to save). */
+  onPendingChange?: (pending: boolean) => void;
+  /** An error message to show under the field. */
+  error?: string;
 };
 
 /**
@@ -23,7 +27,7 @@ type Props = {
  *  - an explicit "Search the full map" button that makes exactly one geocoding request,
  *  - optional "Use my location" and "Pick on map".
  */
-export function PlaceField({ label, value, onChange, placeholder, allowLocation, onTogglePick, picking }: Props) {
+export function PlaceField({ label, value, onChange, placeholder, allowLocation, onTogglePick, picking, onPendingChange, error: fieldError }: Props) {
   const id = useId();
   const listId = `${id}-list`;
   const [text, setText] = useState(value?.label ?? '');
@@ -38,6 +42,11 @@ export function PlaceField({ label, value, onChange, placeholder, allowLocation,
   useEffect(() => {
     setText(value?.label ?? '');
   }, [value?.label]);
+
+  useEffect(() => {
+    onPendingChange?.(text.trim() !== '' && value === null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, value]);
 
   useEffect(() => {
     const q = text.trim();
@@ -204,6 +213,7 @@ export function PlaceField({ label, value, onChange, placeholder, allowLocation,
       )}
       {value && <small className="rr-muted">Saved: {value.lat.toFixed(4)}, {value.lon.toFixed(4)}</small>}
       {error && <small role="alert" className="rr-field-error">{error}</small>}
+      {fieldError && <small role="alert" className="rr-field-error">{fieldError}</small>}
     </div>
   );
 }
